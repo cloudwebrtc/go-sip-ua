@@ -45,9 +45,9 @@ func main() {
 		Endpoint:  endpoint,
 	}, logger)
 
-	ua.InviteStateHandler = func(sess *invite.Session, req sip.Request, state invite.State) {
+	ua.InviteStateHandler = func(sess *invite.Session, req *sip.Request, resp *sip.Response, state invite.Status) {
 		logger.Infof("InviteStateHandler: state => %v, type => %s", state, sess.Direction())
-		if state == invite.Offer {
+		if state == invite.InviteReceived {
 			sess.ProvideAnswer(mock.Answer)
 			sess.Accept(200)
 		}

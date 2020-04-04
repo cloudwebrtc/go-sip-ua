@@ -46,7 +46,7 @@ func NewUserAgent(config *UserAgentConfig, logger log.Logger) *UserAgent {
 	return ua
 }
 
-func (ua *UserAgent) handleInviteState(is *invite.Session, request *sip.Request, response *sip.Response, state invite.State, tx *sip.Transaction) {
+func (ua *UserAgent) handleInviteState(is *invite.Session, request *sip.Request, response *sip.Response, state invite.Status, tx *sip.Transaction) {
 	if request != nil {
 		is.StoreRequest(*request)
 	}
@@ -62,7 +62,7 @@ func (ua *UserAgent) handleInviteState(is *invite.Session, request *sip.Request,
 	is.SetState(state)
 
 	if ua.InviteStateHandler != nil {
-		ua.InviteStateHandler(is, *request, state)
+		ua.InviteStateHandler(is, request, response, state)
 	}
 }
 
@@ -344,7 +344,7 @@ func (ua *UserAgent) handleInvite(request sip.Request, tx sip.ServerTransaction)
 	if ok {
 		var transaction sip.Transaction = tx.(sip.Transaction)
 		if is, found := ua.iss[*callID]; found {
-			ua.handleInviteState(is, &request, nil, invite.Offer, &transaction)
+			ua.handleInviteState(is, &request, nil, invite.InviteReceived, &transaction)
 		} else {
 			uri := request.Recipient().(*sip.SipUri)
 			contact := ua.buildContact(*uri, nil)

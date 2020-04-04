@@ -1,6 +1,8 @@
 package invite
 
 import (
+	"fmt"
+
 	"github.com/ghettovoice/gosip/log"
 	"github.com/ghettovoice/gosip/sip"
 	"github.com/pixelbender/go-sdp/sdp"
@@ -14,19 +16,23 @@ func init() {
 	logger = log.NewDefaultLogrusLogger().WithPrefix("invite.Session")
 }
 
-type State string
+type Status string
 
 const (
-	InviteSent     State = "InviteSent"     /**< After INVITE s sent */
-	InviteReceived State = "InviteReceived" /**< After INVITE s received. */
-	Offer          State = "Offer"          /**< After re-INVITE/UPDATE s received */
-	Answer         State = "Answer"         /**< After response for re-INVITE/UPDATE. */
-	Provisional    State = "Provisional"    /**< After response for 1XX. */
-	EarlyMedia     State = "EarlyMedia"     /**< After response with sdp. */
-	Connecting     State = "Connecting"     /**< After 2xx s sent/received. */
-	Confirmed      State = "Confirmed"      /**< After ACK s sent/received. */
-	Failure        State = "Failure"        /**< Session s rejected or canceled. */
-	Terminated     State = "Terminated"     /**< Session s terminated. */
+	Null           Status = "Null"
+	InviteSent     Status = "InviteSent"     /**< After INVITE s sent */
+	InviteReceived Status = "InviteReceived" /**< After INVITE s received. */
+	//Offer          Status = "Offer"          /**< After re-INVITE/UPDATE s received */
+	//Answer         Status = "Answer"         /**< After response for re-INVITE/UPDATE. */
+	Provisional      Status = "Provisional" /**< After response for 1XX. */
+	EarlyMedia       Status = "EarlyMedia"  /**< After response 1XX with sdp. */
+	WaitingForAnswer Status = "WaitingForAnswer"
+	WaitingForACK    Status = "WaitingForACK" /**< After 2xx s sent/received. */
+	Answered         Status = "Answered"
+	Canceled         Status = "Canceled"
+	Confirmed        Status = "Confirmed"  /**< After ACK s sent/received. */
+	Failure          Status = "Failure"    /**< Session s rejected or canceled. */
+	Terminated       Status = "Terminated" /**< Session s terminated. */
 )
 
 type Direction string
@@ -36,11 +42,11 @@ const (
 	Incoming Direction = "Incoming"
 )
 
-type InviteSessionHandler func(s *Session, req sip.Request, state State)
+type InviteSessionHandler func(s *Session, req *sip.Request, resp *sip.Response, status Status)
 
 type Session struct {
 	contact     *sip.Address
-	state       State
+	status      Status
 	id          sip.CallID
 	offer       *sdp.Session
 	answer      *sdp.Session
@@ -61,6 +67,47 @@ func NewInviteSession(contact *sip.Address, req sip.Request, cid sip.CallID, tx 
 	return s
 }
 
+func (s *Session) isInProgress() bool {
+	switch s.status {
+	case Null:
+		fallthrough
+	case InviteSent:
+		fallthrough
+	case Provisional:
+		fallthrough
+	case InviteReceived:
+		fallthrough
+	case WaitingForAnswer:
+		return true
+	default:
+		return false
+	}
+}
+
+func (s *Session) isEstablished() bool {
+	switch s.status {
+	case Answered:
+		fallthrough
+	case WaitingForACK:
+		fallthrough
+	case Confirmed:
+		return true
+	default:
+		return false
+	}
+}
+
+func (s *Session) isEnded() bool {
+	switch s.status {
+	case Canceled:
+		fallthrough
+	case Terminated:
+		return true
+	default:
+		return false
+	}
+}
+
 func (s *Session) StoreRequest(request sip.Request) {
 	s.request = request
 }
@@ -73,12 +120,12 @@ func (s *Session) StoreTransaction(tx sip.Transaction) {
 	s.transaction = tx
 }
 
-func (s *Session) SetState(state State) {
-	s.state = state
+func (s *Session) SetState(status Status) {
+	s.status = status
 }
 
-func (s *Session) State() State {
-	return s.state
+func (s *Session) Status() Status {
+	return s.status
 }
 
 func (s *Session) Direction() Direction {
@@ -115,20 +162,37 @@ func (s *Session) Reject(statusCode sip.StatusCode, reason string) {
 }
 
 //End end session
-func (s *Session) End() {
+func (s *Session) End(statusCode sip.StatusCode, reason string) error {
 
-	switch s.state {
+	if s.status == Terminated {
+		return fmt.Errorf("Invalid status: %v", s.status)
+	}
+
+	switch s.status {
 	// - UAC -
+	case Null:
+		fallthrough
 	case InviteSent:
+		fallthrough
 	case Provisional:
+		fallthrough
+	case EarlyMedia:
 		logger.Info("Canceling session.")
 
 	// - UAS -
-	case Connecting:
+	case WaitingForAnswer:
+		fallthrough
+	case Answered:
+		logger.Info("Rejecting session")
+
+	case WaitingForACK:
+		fallthrough
 	case Confirmed:
 		logger.Info("Terminating session.")
 
 	}
+
+	return nil
 }
 
 // Accept 200
@@ -169,7 +233,6 @@ func (s *Session) Provisional(statusCode sip.StatusCode, reason string) {
 	tx := (s.transaction.(sip.ServerTransaction))
 	request := s.request
 	var response sip.Response
-
 	if s.answer != nil {
 		sdp := s.answer.String()
 		response = sip.NewResponseFromRequest(request.MessageID(), request, statusCode, reason, sdp)

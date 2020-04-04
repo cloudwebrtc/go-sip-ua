@@ -65,14 +65,14 @@ func NewB2BUA() *B2BUA {
 		Endpoint:  endpoint,
 	}, logger)
 
-	ua.InviteStateHandler = func(sess *invite.Session, req sip.Request, state invite.State) {
+	ua.InviteStateHandler = func(sess *invite.Session, req *sip.Request, resp *sip.Response, state invite.Status) {
 		logger.Infof("InviteStateHandler: state => %v, type => %s", state, sess.Direction())
 
 		switch state {
 		// Received incoming call.
 		case invite.InviteReceived:
-			to, _ := req.To()
-			from, _ := req.From()
+			to, _ := (*req).To()
+			from, _ := (*req).From()
 			aor := to.Address
 			contacts, err := b.registry.GetContacts(aor)
 			if err != nil {
@@ -90,7 +90,7 @@ func NewB2BUA() *B2BUA {
 				if err != nil {
 					logger.Error(err)
 				}
-				sdp := req.Body()
+				sdp := (*req).Body()
 				go ua.Invite(profile, target, &sdp)
 			}
 		}
