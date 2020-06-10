@@ -17,4 +17,4 @@ go run examples/client/main.go
 
 - [ghettovoice/gosip](https://github.com/ghettovoice/gosip) SIP stack
 - [c-bata/go-prompt](https://github.com/c-bata/go-prompt) Console for b2bua
-- [pixelbender/go-sdp](github.com/pixelbender/go-sdp) SDP
+- [pixelbender/go-sdp](https://github.com/pixelbender/go-sdp) SDP
