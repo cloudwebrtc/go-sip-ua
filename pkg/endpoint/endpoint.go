@@ -215,13 +215,6 @@ func (e *EndPoint) handleRequest(req sip.Request, tx sip.ServerTransaction) {
 	logger := e.Log().WithFields(req.Fields())
 	logger.Info("routing incoming SIP request...")
 
-	to, _ := req.To()
-	if !to.Params.Has("tag") {
-		to.Params.Add("tag", sip.String{Str: util.RandString(8)})
-		req.RemoveHeader("To")
-		req.AppendHeader(to)
-	}
-
 	e.hmu.RLock()
 	handler, ok := e.requestHandlers[req.Method()]
 	e.hmu.RUnlock()

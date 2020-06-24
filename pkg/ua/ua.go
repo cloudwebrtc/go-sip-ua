@@ -348,7 +348,7 @@ func (ua *UserAgent) handleInvite(request sip.Request, tx sip.ServerTransaction)
 	if ok {
 		var transaction sip.Transaction = tx.(sip.Transaction)
 		if is, found := ua.iss[*callID]; found {
-			ua.handleInviteState(is, &request, nil, invite.InviteReceived, &transaction)
+			ua.handleInviteState(is, &request, nil, invite.ReInviteReceived, &transaction)
 		} else {
 			//uri := request.Recipient().(*sip.SipUri)
 			//contact := ua.buildContact(*uri, nil)

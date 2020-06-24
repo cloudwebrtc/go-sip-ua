@@ -7,6 +7,7 @@ import (
 	"github.com/cloudwebrtc/go-sip-ua/pkg/endpoint"
 	"github.com/ghettovoice/gosip/log"
 	"github.com/ghettovoice/gosip/sip"
+	"github.com/ghettovoice/gosip/util"
 	"github.com/pixelbender/go-sdp/sdp"
 )
 
@@ -21,10 +22,10 @@ func init() {
 type Status string
 
 const (
-	Null           Status = "Null"
-	InviteSent     Status = "InviteSent"     /**< After INVITE s sent */
-	InviteReceived Status = "InviteReceived" /**< After INVITE s received. */
-	//Offer          Status = "Offer"          /**< After re-INVITE/UPDATE s received */
+	Null             Status = "Null"
+	InviteSent       Status = "InviteSent"       /**< After INVITE s sent */
+	InviteReceived   Status = "InviteReceived"   /**< After INVITE s received. */
+	ReInviteReceived Status = "ReInviteReceived" /**< After re-INVITE/UPDATE s received */
 	//Answer         Status = "Answer"         /**< After response for re-INVITE/UPDATE. */
 	Provisional      Status = "Provisional" /**< After response for 1XX. */
 	EarlyMedia       Status = "EarlyMedia"  /**< After response 1XX with sdp. */
@@ -75,6 +76,12 @@ func NewInviteSession(edp *endpoint.EndPoint, uaType string, contact *sip.Contac
 
 	to, _ := req.To()
 	from, _ := req.From()
+
+	if !to.Params.Has("tag") {
+		to.Params.Add("tag", sip.String{Str: util.RandString(8)})
+		req.RemoveHeader("To")
+		req.AppendHeader(to)
+	}
 
 	if uaType == "UAS" {
 		s.localURI = sip.Address{Uri: to.Address, Params: to.Params}
