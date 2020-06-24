@@ -1,8 +1,10 @@
 package invite
 
 import (
+	"context"
 	"fmt"
 
+	"github.com/cloudwebrtc/go-sip-ua/pkg/endpoint"
 	"github.com/ghettovoice/gosip/log"
 	"github.com/ghettovoice/gosip/sip"
 	"github.com/pixelbender/go-sdp/sdp"
@@ -45,6 +47,7 @@ const (
 type InviteSessionHandler func(s *Session, req *sip.Request, resp *sip.Response, status Status)
 
 type Session struct {
+	edp          *endpoint.EndPoint
 	contact      *sip.ContactHeader
 	status       Status
 	callID       sip.CallID
@@ -60,8 +63,9 @@ type Session struct {
 	remoteTarget sip.Uri
 }
 
-func NewInviteSession(uaType string, contact *sip.ContactHeader, req sip.Request, cid sip.CallID, tx sip.Transaction, dir Direction) *Session {
+func NewInviteSession(edp *endpoint.EndPoint, uaType string, contact *sip.ContactHeader, req sip.Request, cid sip.CallID, tx sip.Transaction, dir Direction) *Session {
 	s := &Session{
+		edp:         edp,
 		uaType:      uaType,
 		callID:      cid,
 		transaction: tx,
@@ -188,7 +192,7 @@ func (s *Session) Reject(statusCode sip.StatusCode, reason string) {
 }
 
 //End end session
-func (s *Session) End(statusCode sip.StatusCode, reason string) error {
+func (s *Session) End() error {
 
 	if s.status == Terminated {
 		return fmt.Errorf("Invalid status: %v", s.status)
@@ -205,17 +209,25 @@ func (s *Session) End(statusCode sip.StatusCode, reason string) error {
 	case EarlyMedia:
 		logger.Info("Canceling session.")
 		s.transaction.Done()
+
 	// - UAS -
 	case WaitingForAnswer:
 		fallthrough
 	case Answered:
 		logger.Info("Rejecting session")
 		s.Reject(603, "Decline")
+
 	case WaitingForACK:
 		fallthrough
 	case Confirmed:
 		logger.Info("Terminating session.")
 		//Send Bye
+		bye, err := s.MakeRequest(sip.BYE)
+		if err != nil {
+			logger.Errorf("bye => %v", err)
+			return err
+		}
+		s.edp.RequestWithContext(context.TODO(), *bye, nil)
 	}
 
 	return nil

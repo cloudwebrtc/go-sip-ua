@@ -416,7 +416,9 @@ func (e *EndPoint) RememberInviteRequest(request sip.Request) {
 }
 
 func (e *EndPoint) AckInviteRequest(request sip.Request, response sip.Response) {
-	ackRequest := sip.NewAckRequest("", request, response)
+	ackRequest := sip.NewAckRequest("", request, response, log.Fields{
+		"sent_at": time.Now(),
+	})
 	maxForwards := sip.MaxForwards(70)
 	ackRequest.AppendHeader(&maxForwards)
 	if err := e.Send(ackRequest); err != nil {
@@ -429,7 +431,9 @@ func (e *EndPoint) AckInviteRequest(request sip.Request, response sip.Response) 
 }
 
 func (e *EndPoint) CancelRequest(request sip.Request, response sip.Response) {
-	cancelRequest := sip.NewCancelRequest("", request)
+	cancelRequest := sip.NewCancelRequest("", request, log.Fields{
+		"sent_at": time.Now(),
+	})
 	if err := e.Send(cancelRequest); err != nil {
 		e.Log().WithFields(map[string]interface{}{
 			"invite_request":  request.Short(),

@@ -353,7 +353,7 @@ func (ua *UserAgent) handleInvite(request sip.Request, tx sip.ServerTransaction)
 			//uri := request.Recipient().(*sip.SipUri)
 			//contact := ua.buildContact(*uri, nil)
 			contact, _ := request.Contact()
-			is := invite.NewInviteSession("UAS", contact, request, *callID, transaction, invite.Incoming)
+			is := invite.NewInviteSession(ua.config.Endpoint, "UAS", contact, request, *callID, transaction, invite.Incoming)
 			ua.iss[*callID] = is
 			ua.handleInviteState(is, &request, nil, invite.InviteReceived, &transaction)
 		}
@@ -398,7 +398,7 @@ func (ua *UserAgent) RequestWithContext(ctx context.Context, request sip.Request
 			if _, found := ua.iss[*callID]; !found {
 				uri := request.Recipient().(*sip.SipUri)
 				contact := ua.buildContact(*uri, nil)
-				is := invite.NewInviteSession("UAC", contact.AsContactHeader(), request, *callID, transaction, invite.Outgoing)
+				is := invite.NewInviteSession(ua.config.Endpoint, "UAC", contact.AsContactHeader(), request, *callID, transaction, invite.Outgoing)
 				ua.iss[*callID] = is
 				ua.handleInviteState(is, &request, nil, invite.InviteSent, &transaction)
 			}
