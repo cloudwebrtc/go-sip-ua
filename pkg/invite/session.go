@@ -45,26 +45,52 @@ const (
 type InviteSessionHandler func(s *Session, req *sip.Request, resp *sip.Response, status Status)
 
 type Session struct {
-	contact     *sip.Address
-	status      Status
-	id          sip.CallID
-	offer       *sdp.Session
-	answer      *sdp.Session
-	request     sip.Request
-	response    sip.Response
-	transaction sip.Transaction
-	direction   Direction
+	contact      *sip.ContactHeader
+	status       Status
+	callID       sip.CallID
+	offer        *sdp.Session
+	answer       *sdp.Session
+	request      sip.Request
+	response     sip.Response
+	transaction  sip.Transaction
+	direction    Direction
+	uaType       string // UAS | UAC
+	remoteURI    sip.Address
+	localURI     sip.Address
+	remoteTarget sip.Uri
 }
 
-func NewInviteSession(contact *sip.Address, req sip.Request, cid sip.CallID, tx sip.Transaction, dir Direction) *Session {
+func NewInviteSession(uaType string, contact *sip.ContactHeader, req sip.Request, cid sip.CallID, tx sip.Transaction, dir Direction) *Session {
 	s := &Session{
-		request:     req,
-		id:          cid,
+		uaType:      uaType,
+		callID:      cid,
 		transaction: tx,
 		direction:   dir,
 		contact:     contact,
 	}
+
+	to, _ := req.To()
+	from, _ := req.From()
+
+	if uaType == "UAS" {
+		s.localURI = sip.Address{Uri: to.Address, Params: to.Params}
+		s.remoteURI = sip.Address{Uri: from.Address, Params: from.Params}
+		s.remoteTarget = contact.Address
+	} else if uaType == "UAC" {
+		s.localURI = sip.Address{Uri: from.Address, Params: from.Params}
+		s.remoteURI = sip.Address{Uri: to.Address, Params: to.Params}
+		s.remoteTarget = contact.Address
+	}
+	s.request = req
 	return s
+}
+
+func (s *Session) CallID() *sip.CallID {
+	return &s.callID
+}
+
+func (s *Session) Request() sip.Request {
+	return s.request
 }
 
 func (s *Session) isInProgress() bool {
@@ -178,18 +204,18 @@ func (s *Session) End(statusCode sip.StatusCode, reason string) error {
 		fallthrough
 	case EarlyMedia:
 		logger.Info("Canceling session.")
-
+		s.transaction.Done()
 	// - UAS -
 	case WaitingForAnswer:
 		fallthrough
 	case Answered:
 		logger.Info("Rejecting session")
-
+		s.Reject(603, "Decline")
 	case WaitingForACK:
 		fallthrough
 	case Confirmed:
 		logger.Info("Terminating session.")
-
+		//Send Bye
 	}
 
 	return nil
@@ -213,12 +239,9 @@ func (s *Session) Accept(statusCode sip.StatusCode) {
 	} else {
 		sip.CopyHeaders("Content-Type", request, response)
 	}
-	/*
-		to, _ := request.To()
-		contact := sip.ContactHeader{Address: to.Address}
-		util.BuildContactHeader("Contact", request, response, nil)
-	*/
-	response.AppendHeader(s.contact.AsContactHeader())
+
+	response.AppendHeader(s.localURI.AsContactHeader())
+
 	s.response = response
 	tx.Respond(response)
 }
@@ -249,4 +272,24 @@ func (s *Session) Provisional(statusCode sip.StatusCode, reason string) {
 
 	s.response = response
 	tx.Respond(response)
+}
+
+func (s *Session) MakeRequest(method sip.RequestMethod) (*sip.Request, error) {
+	builder := sip.NewRequestBuilder().
+		SetMethod(method).
+		SetFrom(&s.localURI).
+		SetTo(&s.remoteURI).
+		SetRecipient(s.remoteTarget)
+		//.AddVia(s.recordRoute[0])
+
+	builder.SetCallID(&s.callID)
+	builder.SetContact(&s.localURI)
+	req, err := builder.Build()
+	if err != nil {
+		logger.Errorf("err => %v", err)
+		return nil, err
+	}
+
+	logger.Infof("buildRequest %v => %v", method, req)
+	return &req, err
 }

@@ -270,6 +270,10 @@ func (ua *UserAgent) Invite(profile *account.Profile, target sip.SipUri, body *s
 	}
 }
 
+func (ua *UserAgent) Request(req *sip.Request) {
+	ua.config.Endpoint.RequestWithContext(context.TODO(), *req, nil)
+}
+
 func (ua *UserAgent) SendBye(profile *account.Profile, callID *sip.CallID, target sip.SipUri) {
 	logger := ua.log
 
@@ -346,9 +350,10 @@ func (ua *UserAgent) handleInvite(request sip.Request, tx sip.ServerTransaction)
 		if is, found := ua.iss[*callID]; found {
 			ua.handleInviteState(is, &request, nil, invite.InviteReceived, &transaction)
 		} else {
-			uri := request.Recipient().(*sip.SipUri)
-			contact := ua.buildContact(*uri, nil)
-			is := invite.NewInviteSession(contact, request, *callID, transaction, invite.Incoming)
+			//uri := request.Recipient().(*sip.SipUri)
+			//contact := ua.buildContact(*uri, nil)
+			contact, _ := request.Contact()
+			is := invite.NewInviteSession("UAS", contact, request, *callID, transaction, invite.Incoming)
 			ua.iss[*callID] = is
 			ua.handleInviteState(is, &request, nil, invite.InviteReceived, &transaction)
 		}
@@ -393,7 +398,7 @@ func (ua *UserAgent) RequestWithContext(ctx context.Context, request sip.Request
 			if _, found := ua.iss[*callID]; !found {
 				uri := request.Recipient().(*sip.SipUri)
 				contact := ua.buildContact(*uri, nil)
-				is := invite.NewInviteSession(contact, request, *callID, transaction, invite.Outgoing)
+				is := invite.NewInviteSession("UAC", contact.AsContactHeader(), request, *callID, transaction, invite.Outgoing)
 				ua.iss[*callID] = is
 				ua.handleInviteState(is, &request, nil, invite.InviteSent, &transaction)
 			}
