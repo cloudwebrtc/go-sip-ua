@@ -77,7 +77,7 @@ func NewInviteSession(edp *endpoint.EndPoint, uaType string, contact *sip.Contac
 	to, _ := req.To()
 	from, _ := req.From()
 
-	if !to.Params.Has("tag") {
+	if to.Params != nil && !to.Params.Has("tag") {
 		to.Params.Add("tag", sip.String{Str: util.RandString(8)})
 		req.RemoveHeader("To")
 		req.AppendHeader(to)
