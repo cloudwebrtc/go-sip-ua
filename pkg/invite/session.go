@@ -62,6 +62,7 @@ type Session struct {
 	remoteURI    sip.Address
 	localURI     sip.Address
 	remoteTarget sip.Uri
+	userData     *interface{}
 }
 
 func NewInviteSession(edp *endpoint.EndPoint, uaType string, contact *sip.ContactHeader, req sip.Request, cid sip.CallID, tx sip.Transaction, dir Direction) *Session {
@@ -77,7 +78,7 @@ func NewInviteSession(edp *endpoint.EndPoint, uaType string, contact *sip.Contac
 	to, _ := req.To()
 	from, _ := req.From()
 
-	if !to.Params.Has("tag") {
+	if to.Params != nil && !to.Params.Has("tag") {
 		to.Params.Add("tag", sip.String{Str: util.RandString(8)})
 		req.RemoveHeader("To")
 		req.AppendHeader(to)
@@ -90,10 +91,14 @@ func NewInviteSession(edp *endpoint.EndPoint, uaType string, contact *sip.Contac
 	} else if uaType == "UAC" {
 		s.localURI = sip.Address{Uri: from.Address, Params: from.Params}
 		s.remoteURI = sip.Address{Uri: to.Address, Params: to.Params}
-		s.remoteTarget = contact.Address
+		s.remoteTarget = req.Recipient()
 	}
 	s.request = req
 	return s
+}
+
+func (s *Session) String() string {
+	return "Local: " + s.localURI.String() + ", Remote: " + s.remoteURI.String()
 }
 
 func (s *Session) CallID() *sip.CallID {
@@ -150,10 +155,20 @@ func (s *Session) StoreRequest(request sip.Request) {
 }
 
 func (s *Session) StoreResponse(response sip.Response) {
+	if s.uaType == "UAC" {
+		to, _ := response.To()
+		if to.Params != nil && to.Params.Has("tag") {
+			//Update to URI.
+			s.remoteURI = sip.Address{Uri: to.Address, Params: to.Params}
+		}
+	}
 	s.response = response
 }
 
 func (s *Session) StoreTransaction(tx sip.Transaction) {
+	if s.transaction != nil {
+		s.transaction.Done()
+	}
 	s.transaction = tx
 }
 
@@ -202,7 +217,9 @@ func (s *Session) Reject(statusCode sip.StatusCode, reason string) {
 func (s *Session) End() error {
 
 	if s.status == Terminated {
-		return fmt.Errorf("Invalid status: %v", s.status)
+		err := fmt.Errorf("Invalid status: %v", s.status)
+		logger.Errorf("Session::End() %v", err)
+		return err
 	}
 
 	switch s.status {
@@ -218,6 +235,8 @@ func (s *Session) End() error {
 		s.transaction.Done()
 
 	// - UAS -
+	case InviteReceived:
+		fallthrough
 	case WaitingForAnswer:
 		fallthrough
 	case Answered:

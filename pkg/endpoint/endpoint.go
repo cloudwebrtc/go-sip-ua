@@ -335,6 +335,7 @@ func (e *EndPoint) RequestWithContext(ctx context.Context, request sip.Request, 
 						}()
 					}
 					responses <- response
+					tx.Done()
 					return
 				}
 

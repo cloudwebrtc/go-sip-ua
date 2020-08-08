@@ -30,6 +30,7 @@ type Profile struct {
 	Auth        *AuthInfo
 	Expires     uint32
 	InstanceID  string
+	Server      string
 }
 
 //NewProfile .

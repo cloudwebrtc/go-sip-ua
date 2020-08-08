@@ -60,6 +60,10 @@ func NewB2BUA() *B2BUA {
 		logger.Panic(err)
 	}
 
+	if err := endpoint.Listen("tls", "0.0.0.0:5061"); err != nil {
+		logger.Panic(err)
+	}
+
 	ua := ua.NewUserAgent(&ua.UserAgentConfig{
 		UserAgent: "Go B2BUA/1.0.0",
 		Endpoint:  endpoint,
