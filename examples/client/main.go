@@ -5,6 +5,7 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+	"fmt"
 
 	"github.com/cloudwebrtc/go-sip-ua/pkg/account"
 	"github.com/cloudwebrtc/go-sip-ua/pkg/endpoint"
@@ -14,6 +15,13 @@ import (
 	"github.com/ghettovoice/gosip/log"
 	"github.com/ghettovoice/gosip/sip"
 	"github.com/ghettovoice/gosip/sip/parser"
+)
+
+const (
+	username = "100"
+	password = "100"
+	displayName = "goSIP"
+	sipServer = "127.0.0.1"
 )
 
 var (
@@ -57,16 +65,17 @@ func main() {
 		logger.Infof("RegisterStateHandler: user => %s, state => %v, expires => %v", state.Account.Auth.AuthName, state.StatusCode, state.Expiration)
 	}
 
-	profile := account.NewProfile("100", "goSIP",
+	profile := account.NewProfile(username, displayName,
 		&account.AuthInfo{
-			AuthName: "100",
-			Password: "100",
+			AuthName: username,
+			Password: password,
 			Realm:    "",
 		},
 		1800,
 	)
 
-	target, err := parser.ParseSipUri("sip:100@127.0.0.1:5060;transport=udp")
+	uri := fmt.Sprintf("sip:%s@%s:5060;transport=udp", username, sipServer)
+	target, err := parser.ParseSipUri(uri)
 	if err != nil {
 		logger.Error(err)
 	}
