@@ -14,6 +14,7 @@ import (
 	"github.com/ghettovoice/gosip/sip"
 	"github.com/ghettovoice/gosip/sip/parser"
 	"github.com/ghettovoice/gosip/transport"
+	sdp "github.com/pixelbender/go-sdp/sdp"
 )
 
 type B2BCall struct {
@@ -27,6 +28,7 @@ type B2BUA struct {
 	accounts map[string]string
 	registry registry.Registry
 	domains  []string
+	sessions []*B2BCall
 }
 
 var (
@@ -102,10 +104,49 @@ func NewB2BUA() *B2BUA {
 					logger.Error(err)
 				}
 				sdp := (*req).Body()
-				go ua.Invite(profile, target, &sdp)
-			}
-		}
+				dest, err := ua.Invite(profile, target, &sdp)
+				if err != nil {
+					logger.Errorf("B leg session error: %v", err)
+					return
+				}
 
+				b2bCall := &B2BCall{source: sess, dest: dest}
+				b.sessions = append(b.sessions, b2bCall)
+			}
+		case invite.Failure:
+			fallthrough
+		case invite.Canceled:
+			fallthrough
+		case invite.Terminated:
+			call := b.findB2BCall(sess)
+			if call != nil {
+				if call.source == sess {
+					call.dest.End()
+				} else if call.dest == sess {
+					call.source.End()
+				}
+			}
+			b.deleteB2BCall(sess)
+			break
+		case invite.Provisional:
+			call := b.findB2BCall(sess)
+			if call != nil && call.dest == sess {
+				call.source.Provisional((*resp).StatusCode(), (*resp).Reason())
+			}
+			break
+		case invite.EarlyMedia:
+			fallthrough
+		case invite.Confirmed:
+			body := (*req).Body()
+			logger.Infof("invite.Confirmed: sdp => %v", body)
+			call := b.findB2BCall(sess)
+			if call != nil && call.dest == sess {
+				answer, _ := sdp.ParseString(body)
+				call.source.ProvideAnswer(answer)
+				call.source.Accept(200)
+			}
+			break
+		}
 		/*
 			if state == invite.Offer {
 				sess.ProvideAnswer(answer)
@@ -116,7 +157,8 @@ func NewB2BUA() *B2BUA {
 				sess.Provisional(180, "Ringing")
 				sess.ProvideAnswer(answer)
 				sess.Accept(200)
-			}*/
+			}
+		*/
 	}
 
 	ua.RegisterStateHandler = func(state account.RegisterState) {
@@ -126,6 +168,24 @@ func NewB2BUA() *B2BUA {
 	endpoint.OnRequest(sip.REGISTER, b.handleRegister)
 	b.ua = ua
 	return b
+}
+
+func (b *B2BUA) findB2BCall(sess *invite.Session) *B2BCall {
+	for _, call := range b.sessions {
+		if call.source == sess || call.dest == sess {
+			return call
+		}
+	}
+	return nil
+}
+
+func (b *B2BUA) deleteB2BCall(sess *invite.Session) {
+	for idx, call := range b.sessions {
+		if call.source == sess || call.dest == sess {
+			b.sessions = append(b.sessions[:idx], b.sessions[idx+1:]...)
+			return
+		}
+	}
 }
 
 //Shutdown .

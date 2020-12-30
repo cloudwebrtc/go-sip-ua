@@ -96,7 +96,7 @@ func (mr *MemoryRegistry) GetAllContacts() map[sip.Uri]map[string]*ContactInstan
 
 func findInstances(aors map[sip.Uri]map[string]*ContactInstance, aor sip.Uri) (*map[string]*ContactInstance, error) {
 	for key, instances := range aors {
-		if key.Equals(aor) {
+		if key.User() == aor.User() {
 			return &instances, nil
 		}
 	}

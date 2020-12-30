@@ -232,7 +232,12 @@ func (s *Session) End() error {
 		fallthrough
 	case EarlyMedia:
 		logger.Info("Canceling session.")
-		s.transaction.Done()
+		switch s.transaction.(type) {
+		case sip.ClientTransaction:
+			s.transaction.(sip.ClientTransaction).Cancel()
+		case sip.ServerTransaction:
+			s.transaction.(sip.ServerTransaction).Done()
+		}
 
 	// - UAS -
 	case InviteReceived:
