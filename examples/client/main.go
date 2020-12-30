@@ -5,7 +5,6 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
-	"fmt"
 
 	"github.com/cloudwebrtc/go-sip-ua/pkg/account"
 	"github.com/cloudwebrtc/go-sip-ua/pkg/endpoint"
@@ -15,13 +14,6 @@ import (
 	"github.com/ghettovoice/gosip/log"
 	"github.com/ghettovoice/gosip/sip"
 	"github.com/ghettovoice/gosip/sip/parser"
-)
-
-const (
-	username = "100"
-	password = "100"
-	displayName = "goSIP"
-	sipServer = "127.0.0.1"
 )
 
 var (
@@ -40,11 +32,11 @@ func main() {
 	listen := "0.0.0.0:5080"
 	logger.Infof("Listen => %s", listen)
 
-	if err := endpoint.Listen("udp", listen); err != nil {
+	if err := endpoint.Listen("udp", listen, nil); err != nil {
 		logger.Panic(err)
 	}
 
-	if err := endpoint.Listen("tcp", listen); err != nil {
+	if err := endpoint.Listen("tcp", listen, nil); err != nil {
 		logger.Panic(err)
 	}
 
@@ -65,17 +57,16 @@ func main() {
 		logger.Infof("RegisterStateHandler: user => %s, state => %v, expires => %v", state.Account.Auth.AuthName, state.StatusCode, state.Expiration)
 	}
 
-	profile := account.NewProfile(username, displayName,
+	profile := account.NewProfile("100", "goSIP",
 		&account.AuthInfo{
-			AuthName: username,
-			Password: password,
+			AuthName: "100",
+			Password: "100",
 			Realm:    "",
 		},
 		1800,
 	)
 
-	uri := fmt.Sprintf("sip:%s@%s:5060;transport=udp", username, sipServer)
-	target, err := parser.ParseSipUri(uri)
+	target, err := parser.ParseSipUri("sip:100@127.0.0.1:5060;transport=udp")
 	if err != nil {
 		logger.Error(err)
 	}

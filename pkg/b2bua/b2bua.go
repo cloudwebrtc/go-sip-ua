@@ -13,6 +13,7 @@ import (
 	"github.com/ghettovoice/gosip/log"
 	"github.com/ghettovoice/gosip/sip"
 	"github.com/ghettovoice/gosip/sip/parser"
+	"github.com/ghettovoice/gosip/transport"
 )
 
 type B2BCall struct {
@@ -52,18 +53,24 @@ func NewB2BUA() *B2BUA {
 		},
 	}, logger)
 
-	if err := endpoint.Listen("udp", "0.0.0.0:5060"); err != nil {
+	if err := endpoint.Listen("udp", "0.0.0.0:5060", nil); err != nil {
 		logger.Panic(err)
 	}
 
-	if err := endpoint.Listen("tcp", "0.0.0.0:5060"); err != nil {
+	if err := endpoint.Listen("tcp", "0.0.0.0:5070", nil); err != nil {
 		logger.Panic(err)
 	}
-	/*
-	if err := endpoint.Listen("tls", "0.0.0.0:5061"); err != nil {
+
+	tlsOptions := &transport.Options{CertFile: "certs/cert.pem", KeyFile: "certs/key.pem"}
+
+	if err := endpoint.Listen("tls", "0.0.0.0:5061", tlsOptions); err != nil {
 		logger.Panic(err)
 	}
-	*/
+
+	if err := endpoint.Listen("wss", "0.0.0.0:5081", tlsOptions); err != nil {
+		logger.Panic(err)
+	}
+
 	ua := ua.NewUserAgent(&ua.UserAgentConfig{
 		UserAgent: "Go B2BUA/1.0.0",
 		Endpoint:  endpoint,
