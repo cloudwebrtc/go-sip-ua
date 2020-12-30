@@ -128,14 +128,19 @@ func NewB2BUA() *B2BUA {
 			}
 			b.deleteB2BCall(sess)
 			break
+		case invite.EarlyMedia:
+			fallthrough
 		case invite.Provisional:
 			call := b.findB2BCall(sess)
 			if call != nil && call.dest == sess {
+				body := (*req).Body()
+				if len(body) > 0 {
+					answer, _ := sdp.ParseString(body)
+					call.source.ProvideAnswer(answer)
+				}
 				call.source.Provisional((*resp).StatusCode(), (*resp).Reason())
 			}
 			break
-		case invite.EarlyMedia:
-			fallthrough
 		case invite.Confirmed:
 			body := (*req).Body()
 			logger.Infof("invite.Confirmed: sdp => %v", body)
