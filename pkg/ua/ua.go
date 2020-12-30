@@ -132,12 +132,17 @@ func (ua *UserAgent) buildViaHopHeader(target sip.SipUri) *sip.ViaHop {
 		host = "127.0.0.1"
 	}
 
+	port := netinfo.Port
+	if target.Port() != nil {
+		port = target.Port()
+	}
+
 	viaHop := &sip.ViaHop{
 		ProtocolName:    "SIP",
 		ProtocolVersion: "2.0",
 		Transport:       protocol,
 		Host:            host,
-		Port:            netinfo.Port,
+		Port:            port,
 		Params:          sip.NewParams().Add("branch", sip.String{Str: sip.GenerateBranch()}),
 	}
 	return viaHop
@@ -403,7 +408,7 @@ func (ua *UserAgent) handleInvite(request sip.Request, tx sip.ServerTransaction)
 // RequestWithContext .
 func (ua *UserAgent) RequestWithContext(ctx context.Context, request sip.Request, authorizer sip.Authorizer) (sip.Response, error) {
 	e := ua.config.Endpoint
-	tx, err := e.Request(sip.CopyRequest(request))
+	tx, err := e.Request(request)
 	if err != nil {
 		return nil, err
 	}

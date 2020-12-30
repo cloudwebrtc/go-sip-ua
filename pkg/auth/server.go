@@ -103,7 +103,7 @@ func (auth *ServerAuthorizer) requestAuthentication(request sip.Request, tx sip.
 		nonce:   nonce,
 		created: time.Now(),
 	}
-	sip.CopyHeaders("Content-Length", request, response)
+	response.SetBody("", true)
 	util.BuildContactHeader("Contact", request, response, nil)
 	tx.Respond(response)
 	return

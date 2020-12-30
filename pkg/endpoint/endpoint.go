@@ -257,7 +257,7 @@ func (e *EndPoint) Request(req sip.Request) (sip.ClientTransaction, error) {
 
 // RequestWithContext .
 func (e *EndPoint) RequestWithContext(ctx context.Context, request sip.Request, authorizer sip.Authorizer) (sip.Response, error) {
-	tx, err := e.Request(sip.CopyRequest(request))
+	tx, err := e.Request(request)
 	if err != nil {
 		return nil, err
 	}

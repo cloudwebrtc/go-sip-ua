@@ -9,7 +9,6 @@ import (
 	"github.com/cloudwebrtc/go-sip-ua/pkg/account"
 	"github.com/cloudwebrtc/go-sip-ua/pkg/endpoint"
 	"github.com/cloudwebrtc/go-sip-ua/pkg/invite"
-	"github.com/cloudwebrtc/go-sip-ua/pkg/mock"
 	"github.com/cloudwebrtc/go-sip-ua/pkg/ua"
 	"github.com/ghettovoice/gosip/log"
 	"github.com/ghettovoice/gosip/sip"
@@ -48,7 +47,7 @@ func main() {
 	ua.InviteStateHandler = func(sess *invite.Session, req *sip.Request, resp *sip.Response, state invite.Status) {
 		logger.Infof("InviteStateHandler: state => %v, type => %s", state, sess.Direction())
 		if state == invite.InviteReceived {
-			sess.ProvideAnswer(mock.Answer)
+			sess.ProvideAnswer("")
 			sess.Accept(200)
 		}
 	}

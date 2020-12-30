@@ -8,7 +8,6 @@ import (
 	"github.com/ghettovoice/gosip/log"
 	"github.com/ghettovoice/gosip/sip"
 	"github.com/ghettovoice/gosip/util"
-	"github.com/pixelbender/go-sdp/sdp"
 )
 
 var (
@@ -52,8 +51,8 @@ type Session struct {
 	contact      *sip.ContactHeader
 	status       Status
 	callID       sip.CallID
-	offer        *sdp.Session
-	answer       *sdp.Session
+	offer        string
+	answer       string
 	request      sip.Request
 	response     sip.Response
 	transaction  sip.Transaction
@@ -73,6 +72,8 @@ func NewInviteSession(edp *endpoint.EndPoint, uaType string, contact *sip.Contac
 		transaction: tx,
 		direction:   dir,
 		contact:     contact,
+		offer:       "",
+		answer:      "",
 	}
 
 	to, _ := req.To()
@@ -185,17 +186,17 @@ func (s *Session) Direction() Direction {
 }
 
 // GetEarlyMedia Get sdp for early media.
-func (s *Session) GetEarlyMedia() *sdp.Session {
+func (s *Session) GetEarlyMedia() string {
 	return s.answer
 }
 
 //ProvideOffer .
-func (s *Session) ProvideOffer(sdp *sdp.Session) {
+func (s *Session) ProvideOffer(sdp string) {
 	s.offer = sdp
 }
 
 // ProvideAnswer .
-func (s *Session) ProvideAnswer(sdp *sdp.Session) {
+func (s *Session) ProvideAnswer(sdp string) {
 	s.answer = sdp
 }
 
@@ -268,12 +269,12 @@ func (s *Session) End() error {
 func (s *Session) Accept(statusCode sip.StatusCode) {
 	tx := (s.transaction.(sip.ServerTransaction))
 
-	if s.answer == nil {
+	if len(s.answer) == 0 {
 		logger.Errorf("Answer sdp is nil!")
 		return
 	}
 	request := s.request
-	response := sip.NewResponseFromRequest(request.MessageID(), request, 200, "OK", s.answer.String())
+	response := sip.NewResponseFromRequest(request.MessageID(), request, 200, "OK", s.answer)
 
 	hdrs := request.GetHeaders("Content-Type")
 	if len(hdrs) == 0 {
@@ -299,9 +300,8 @@ func (s *Session) Provisional(statusCode sip.StatusCode, reason string) {
 	tx := (s.transaction.(sip.ServerTransaction))
 	request := s.request
 	var response sip.Response
-	if s.answer != nil {
-		sdp := s.answer.String()
-		response = sip.NewResponseFromRequest(request.MessageID(), request, statusCode, reason, sdp)
+	if len(s.answer) > 0 {
+		response = sip.NewResponseFromRequest(request.MessageID(), request, statusCode, reason, s.answer)
 		hdrs := response.GetHeaders("Content-Type")
 		if len(hdrs) == 0 {
 			contentType := sip.ContentType("application/sdp")

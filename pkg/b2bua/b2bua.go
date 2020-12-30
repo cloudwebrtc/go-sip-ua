@@ -14,7 +14,6 @@ import (
 	"github.com/ghettovoice/gosip/sip"
 	"github.com/ghettovoice/gosip/sip/parser"
 	"github.com/ghettovoice/gosip/transport"
-	sdp "github.com/pixelbender/go-sdp/sdp"
 )
 
 type B2BCall struct {
@@ -59,7 +58,7 @@ func NewB2BUA() *B2BUA {
 		logger.Panic(err)
 	}
 
-	if err := endpoint.Listen("tcp", "0.0.0.0:5070", nil); err != nil {
+	if err := endpoint.Listen("tcp", "0.0.0.0:5060", nil); err != nil {
 		logger.Panic(err)
 	}
 
@@ -133,21 +132,18 @@ func NewB2BUA() *B2BUA {
 		case invite.Provisional:
 			call := b.findB2BCall(sess)
 			if call != nil && call.dest == sess {
-				body := (*req).Body()
-				if len(body) > 0 {
-					answer, _ := sdp.ParseString(body)
-					call.source.ProvideAnswer(answer)
+				sdp := (*req).Body()
+				if len(sdp) > 0 {
+					call.source.ProvideAnswer(sdp)
 				}
 				call.source.Provisional((*resp).StatusCode(), (*resp).Reason())
 			}
 			break
 		case invite.Confirmed:
-			body := (*req).Body()
-			logger.Infof("invite.Confirmed: sdp => %v", body)
+			sdp := (*req).Body()
 			call := b.findB2BCall(sess)
 			if call != nil && call.dest == sess {
-				answer, _ := sdp.ParseString(body)
-				call.source.ProvideAnswer(answer)
+				call.source.ProvideAnswer(sdp)
 				call.source.Accept(200)
 			}
 			break
