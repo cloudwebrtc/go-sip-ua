@@ -9,7 +9,7 @@ import (
 	"github.com/cloudwebrtc/go-sip-ua/pkg/invite"
 	"github.com/cloudwebrtc/go-sip-ua/pkg/registry"
 	"github.com/cloudwebrtc/go-sip-ua/pkg/ua"
-	utils "github.com/cloudwebrtc/go-sip-ua/pkg/util"
+	"github.com/cloudwebrtc/go-sip-ua/pkg/util"
 	"github.com/ghettovoice/gosip/log"
 	"github.com/ghettovoice/gosip/sip"
 	"github.com/ghettovoice/gosip/sip/parser"
@@ -108,9 +108,7 @@ func NewB2BUA() *B2BUA {
 					logger.Errorf("B leg session error: %v", err)
 					return
 				}
-
-				b2bCall := &B2BCall{source: sess, dest: dest}
-				b.sessions = append(b.sessions, b2bCall)
+				b.sessions = append(b.sessions, &B2BCall{source: sess, dest: dest})
 			}
 		case invite.Failure:
 			fallthrough
@@ -132,7 +130,7 @@ func NewB2BUA() *B2BUA {
 		case invite.Provisional:
 			call := b.findB2BCall(sess)
 			if call != nil && call.dest == sess {
-				sdp := (*req).Body()
+				sdp := (*resp).Body()
 				if len(sdp) > 0 {
 					call.source.ProvideAnswer(sdp)
 				}
@@ -140,9 +138,10 @@ func NewB2BUA() *B2BUA {
 			}
 			break
 		case invite.Confirmed:
-			sdp := (*req).Body()
+
 			call := b.findB2BCall(sess)
 			if call != nil && call.dest == sess {
+				sdp := (*resp).Body()
 				call.source.ProvideAnswer(sdp)
 				call.source.Accept(200)
 			}
@@ -266,7 +265,7 @@ func (b *B2BUA) handleRegister(request sip.Request, tx sip.ServerTransaction) {
 
 	resp := sip.NewResponseFromRequest(request.MessageID(), request, 200, reason, "")
 	sip.CopyHeaders("Expires", request, resp)
-	utils.BuildContactHeader("Contact", request, resp, &expires)
+	util.BuildContactHeader("Contact", request, resp, &expires)
 	sip.CopyHeaders("Content-Length", request, resp)
 	tx.Respond(resp)
 

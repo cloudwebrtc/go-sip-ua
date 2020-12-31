@@ -101,6 +101,7 @@ func main() {
 	b2bua.AddAccount("100", "100")
 	b2bua.AddAccount("200", "200")
 	b2bua.AddAccount("300", "300")
+	b2bua.AddAccount("400", "400")
 
 	if console {
 		consoleLoop(b2bua)

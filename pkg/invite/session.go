@@ -5,9 +5,10 @@ import (
 	"fmt"
 
 	"github.com/cloudwebrtc/go-sip-ua/pkg/endpoint"
+
 	"github.com/ghettovoice/gosip/log"
 	"github.com/ghettovoice/gosip/sip"
-	"github.com/ghettovoice/gosip/util"
+	gosip_util "github.com/ghettovoice/gosip/util"
 )
 
 var (
@@ -80,7 +81,7 @@ func NewInviteSession(edp *endpoint.EndPoint, uaType string, contact *sip.Contac
 	from, _ := req.From()
 
 	if to.Params != nil && !to.Params.Has("tag") {
-		to.Params.Add("tag", sip.String{Str: util.RandString(8)})
+		to.Params.Add("tag", sip.String{Str: gosip_util.RandString(8)})
 		req.RemoveHeader("To")
 		req.AppendHeader(to)
 	}
@@ -205,6 +206,13 @@ func (s *Session) Info(content *sip.String) {
 
 }
 
+//Bye send Bye request.
+func (s *Session) Bye() {
+	bye := s.makeByeRequest(s.uaType, sip.MessageID(s.callID), s.request, s.response)
+	logger.Infof(s.uaType+" build request: %v => \n%v", sip.BYE, bye)
+	s.edp.RequestWithContext(context.TODO(), bye, nil)
+}
+
 // Reject Reject incoming call or for re-INVITE or UPDATE,
 func (s *Session) Reject(statusCode sip.StatusCode, reason string) {
 	tx := (s.transaction.(sip.ServerTransaction))
@@ -253,13 +261,7 @@ func (s *Session) End() error {
 		fallthrough
 	case Confirmed:
 		logger.Info("Terminating session.")
-		//Send Bye
-		bye, err := s.MakeRequest(sip.BYE)
-		if err != nil {
-			logger.Errorf("bye => %v", err)
-			return err
-		}
-		s.edp.RequestWithContext(context.TODO(), *bye, nil)
+		s.Bye()
 	}
 
 	return nil
@@ -317,22 +319,44 @@ func (s *Session) Provisional(statusCode sip.StatusCode, reason string) {
 	tx.Respond(response)
 }
 
-func (s *Session) MakeRequest(method sip.RequestMethod) (*sip.Request, error) {
-	builder := sip.NewRequestBuilder().
-		SetMethod(method).
-		SetFrom(&s.localURI).
-		SetTo(&s.remoteURI).
-		SetRecipient(s.remoteTarget)
-		//.AddVia(s.recordRoute[0])
+func (s *Session) makeByeRequest(uaType string, msgID sip.MessageID, inviteRequest sip.Request, inviteResponse sip.Response) sip.Request {
+	byeRequest := sip.NewRequest(
+		msgID,
+		sip.BYE,
+		s.remoteTarget,
+		inviteRequest.SipVersion(),
+		[]sip.Header{},
+		"",
+		inviteRequest.Fields().
+			WithFields(log.Fields{
+				"invite_request_id": inviteRequest.MessageID(),
+			}),
+	)
 
-	builder.SetCallID(&s.callID)
-	builder.SetContact(&s.localURI)
-	req, err := builder.Build()
-	if err != nil {
-		logger.Errorf("err => %v", err)
-		return nil, err
+	if uaType == "UAC" {
+		sip.CopyHeaders("Via", inviteRequest, byeRequest)
+		if len(inviteRequest.GetHeaders("Route")) > 0 {
+			sip.CopyHeaders("Route", inviteRequest, byeRequest)
+		}
+		sip.CopyHeaders("From", inviteRequest, byeRequest)
+		sip.CopyHeaders("To", inviteResponse, byeRequest)
+	} else if uaType == "UAS" {
+		sip.CopyHeaders("Via", inviteRequest, byeRequest)
+		if len(inviteResponse.GetHeaders("Route")) > 0 {
+			sip.CopyHeaders("Route", inviteResponse, byeRequest)
+		}
+		sip.CopyHeaders("From", inviteResponse, byeRequest)
+		sip.CopyHeaders("To", inviteRequest, byeRequest)
+		byeRequest.SetDestination(inviteResponse.Destination())
+		byeRequest.SetSource(inviteResponse.Source())
 	}
 
-	logger.Infof("buildRequest %v => %v", method, req)
-	return &req, err
+	maxForwardsHeader := sip.MaxForwards(70)
+	byeRequest.AppendHeader(&maxForwardsHeader)
+	sip.CopyHeaders("Call-ID", inviteRequest, byeRequest)
+	sip.CopyHeaders("CSeq", inviteRequest, byeRequest)
+	cseq, _ := byeRequest.CSeq()
+	cseq.MethodName = sip.BYE
+
+	return byeRequest
 }

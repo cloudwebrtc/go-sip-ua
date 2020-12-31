@@ -413,8 +413,8 @@ func (e *EndPoint) AckInviteRequest(request sip.Request, response sip.Response) 
 	ackRequest := sip.NewAckRequest("", request, response, log.Fields{
 		"sent_at": time.Now(),
 	})
-	maxForwards := sip.MaxForwards(70)
-	ackRequest.AppendHeader(&maxForwards)
+	ackRequest.SetSource(request.Source())
+	ackRequest.SetDestination(request.Destination())
 	if err := e.Send(ackRequest); err != nil {
 		e.Log().WithFields(map[string]interface{}{
 			"invite_request":  request.Short(),
