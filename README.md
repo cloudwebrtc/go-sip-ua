@@ -30,7 +30,7 @@ Run the mini b2bua.
 go run examples/b2bua/main.go -c
 ```
 
-You can use [dart-sip-ua](https://github.com/flutter-webrtc/dart-sip-ua) or [linphone](https://www.linphone.org/) or [jssip](https://tryit.jssip.net/) to test call registration, built-in test account 100~400
+You can use [dart-sip-ua](https://github.com/flutter-webrtc/dart-sip-ua) or [linphone](https://www.linphone.org/) or [jssip](https://tryit.jssip.net/) to test call or registration, built-in test account 100~400
 ```
 WebSocket: wss://127.0.0.1:5081
 SIP URI: 100@127.0.0.1
