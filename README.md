@@ -2,6 +2,12 @@
 
 SIP UA library for client/b2bua using golang
 
+## Features
+- [x] [B2BUA/Client] Websocket over SIP.
+- [x] [Client] Pure Go SIP Client.
+- [ ] [B2BUA] RTP relay (UDP<-->UDP, WebRTC/ICE<->UDP).
+- [ ] [B2BUA] Add RFC8599 support.
+
 ## Running the examples
 
 ```bash
@@ -20,6 +26,7 @@ go run examples/client/main.go
 ```
 
 ### B2BUA
+B2BUA is a minimal SIP call switch, it registers and calls, and supports UDP/TCP/TLS/WebSockets.
 
 When you need a quick test for TLS/WSS, you can use [mkcert](https://github.com/FiloSottile/mkcert) to create a local self-signed certificate.
 
