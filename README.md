@@ -3,6 +3,7 @@
 SIP UA library for client/b2bua using golang
 
 ## Features
+
 - [x] [B2BUA/Client] Websocket over SIP.
 - [x] [Client] Pure Go SIP Client.
 - [ ] [B2BUA] RTP relay (UDP<-->UDP, WebRTC/ICE<->UDP).
@@ -20,12 +21,14 @@ cd go-sip-ua
 ```
 
 ### Client
+
 ```bash
 # run client
 go run examples/client/main.go
 ```
 
 ### B2BUA
+
 B2BUA is a minimal SIP call switch, it registers and calls, and supports UDP/TCP/TLS/WebSockets.
 
 When you need a quick test for TLS/WSS, you can use [mkcert](https://github.com/FiloSottile/mkcert) to create a local self-signed certificate.
@@ -36,12 +39,14 @@ mkcert -key-file certs/key.pem -cert-file certs/cert.pem  localhost 127.0.0.1 ::
 ```
 
 Run the mini b2bua.
+
 ```bash
 # run b2bua
 go run examples/b2bua/main.go -c
 ```
 
 You can use [dart-sip-ua](https://github.com/flutter-webrtc/dart-sip-ua) or [linphone](https://www.linphone.org/) or [jssip](https://tryit.jssip.net/) to test call or registration, built-in test account 100~400
+
 ```
 WebSocket: wss://127.0.0.1:5081
 SIP URI: 100@127.0.0.1
@@ -49,6 +54,7 @@ Authorization User: 100
 Password: 100
 Display Name: Flutter SIP Client
 ```
+
 ## Dependencies
 
 - [ghettovoice/gosip](https://github.com/ghettovoice/gosip) SIP stack
