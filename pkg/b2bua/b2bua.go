@@ -62,7 +62,7 @@ func NewB2BUA() *B2BUA {
 		logger.Panic(err)
 	}
 
-	tlsOptions := &transport.Options{CertFile: "certs/cert.pem", KeyFile: "certs/key.pem"}
+	tlsOptions := &transport.TLSConfig{Cert: "certs/cert.pem", Key: "certs/key.pem"}
 
 	if err := endpoint.Listen("tls", "0.0.0.0:5061", tlsOptions); err != nil {
 		logger.Panic(err)

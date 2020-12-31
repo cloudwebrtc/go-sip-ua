@@ -145,7 +145,7 @@ func (e *EndPoint) Log() log.Logger {
 }
 
 // Listen ListenAndServe starts serving listeners on the provided address
-func (e *EndPoint) Listen(protocol string, listenAddr string, options *transport.Options) error {
+func (e *EndPoint) Listen(protocol string, listenAddr string, options *transport.TLSConfig) error {
 	network := strings.ToUpper(protocol)
 	err := e.tp.Listen(network, listenAddr, options)
 	if err == nil {
