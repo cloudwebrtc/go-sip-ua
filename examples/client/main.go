@@ -74,9 +74,9 @@ func main() {
 	time.Sleep(time.Second * 10)
 	go ua.SendRegister(profile, target, 0)
 	/*
-		sdp := mock.answer.String()
+		sdp := mock.Answer.String()
 		called := "weiweiduan"
-		go ua.Invite(profile, &sip.SipUri{
+		go ua.Invite(profile, sip.SipUri{
 			FUser:      sip.String{Str: called},
 			FHost:      target.Host(),
 			FPort:      target.Port(),
