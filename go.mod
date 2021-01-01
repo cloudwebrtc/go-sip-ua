@@ -6,7 +6,7 @@ replace github.com/ghettovoice/gosip v0.0.0-20200807105127-dadd6a686e38 => ../go
 
 require (
 	github.com/c-bata/go-prompt v0.2.3
-	github.com/ghettovoice/gosip v0.0.0-20200807105127-dadd6a686e38
+	github.com/ghettovoice/gosip v0.0.0-20201214141153-0aff90dbe5be
 	github.com/google/uuid v1.1.1
 	github.com/mattn/go-runewidth v0.0.9 // indirect
 	github.com/mattn/go-tty v0.0.3 // indirect
