@@ -1,6 +1,7 @@
 package main
 
 import (
+	"net"
 	"os"
 	"os/signal"
 	"syscall"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/cloudwebrtc/go-sip-ua/pkg/account"
 	"github.com/cloudwebrtc/go-sip-ua/pkg/mock"
+	"github.com/cloudwebrtc/go-sip-ua/pkg/rtp"
 	"github.com/cloudwebrtc/go-sip-ua/pkg/session"
 	"github.com/cloudwebrtc/go-sip-ua/pkg/stack"
 	"github.com/cloudwebrtc/go-sip-ua/pkg/ua"
@@ -19,10 +21,25 @@ import (
 
 var (
 	logger log.Logger
+	udp    *rtp.RtpUDPStream
 )
 
 func init() {
 	logger = log.NewDefaultLogrusLogger().WithPrefix("Client")
+}
+
+func createUdp() *rtp.RtpUDPStream {
+
+	udp = rtp.NewRtpUDPStream("127.0.0.1", rtp.DefaultPortMin, rtp.DefaultPortMax, func(data []byte, raddr net.Addr) {
+		logger.Infof("Rtp recevied: %v, laddr %s : raddr %s", len(data), udp.LocalAddr().String(), raddr)
+		dest, _ := net.ResolveUDPAddr(raddr.Network(), raddr.String())
+		logger.Infof("Echo rtp to %v", raddr)
+		udp.Send(data, dest)
+	}, logger)
+
+	go udp.Read()
+
+	return udp
 }
 
 func main() {
@@ -54,10 +71,22 @@ func main() {
 
 	ua.InviteStateHandler = func(sess *session.Session, req *sip.Request, resp *sip.Response, state session.Status) {
 		logger.Infof("InviteStateHandler: state => %v, type => %s", state, sess.Direction())
-		if state == session.InviteReceived {
-			sdp := mock.Answer.String()
+
+		switch state {
+		case session.InviteReceived:
+			udp = createUdp()
+			udpLaddr := udp.LocalAddr()
+			sdp := mock.BuildLocalSdp(udpLaddr.IP.String(), udpLaddr.Port)
 			sess.ProvideAnswer(sdp)
 			sess.Accept(200)
+			break
+
+		case session.Canceled:
+			fallthrough
+		case session.Failure:
+			fallthrough
+		case session.Terminated:
+			udp.Close()
 		}
 	}
 
@@ -82,9 +111,12 @@ func main() {
 	go ua.SendRegister(profile, target, profile.Expires)
 	time.Sleep(time.Second * 3)
 
-	sdp := mock.Offer.String()
+	udp = createUdp()
+	udpLaddr := udp.LocalAddr()
+	sdp := mock.BuildLocalSdp(udpLaddr.IP.String(), udpLaddr.Port)
 	called := "400"
 	target.FUser = sip.String{Str: called}
+
 	go ua.Invite(profile, target, &sdp)
 
 	time.Sleep(time.Second * 3)

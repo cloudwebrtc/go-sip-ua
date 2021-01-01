@@ -1,6 +1,7 @@
 package rtp_test
 
 import (
+	"net"
 	"sync"
 	"testing"
 
@@ -28,7 +29,7 @@ func init() {
 }
 
 func TestUdpStream(t *testing.T) {
-	udp := rtp.NewRtpUDPStream("127.0.0.1", rtp.DefaultPortMin, rtp.DefaultPortMax, func(data []byte) {
+	udp := rtp.NewRtpUDPStream("127.0.0.1", rtp.DefaultPortMin, rtp.DefaultPortMax, func(data []byte, raddr net.Addr) {
 		wg.Done()
 
 		got := string(data)
@@ -36,7 +37,7 @@ func TestUdpStream(t *testing.T) {
 			t.Errorf("onpkt = %s; want hello", got)
 		}
 
-		logger.Debugf("onpkt %v\n", got)
+		logger.Debugf("onpkt %v, raddr %v\n", got, raddr.String())
 	}, logger)
 
 	logger.Debugf("laddr %v\n", udp.LocalAddr())

@@ -15,13 +15,13 @@ const (
 type RtpUDPStream struct {
 	conn     *net.UDPConn
 	stop     bool
-	onPacket func(pkt []byte)
+	onPacket func(pkt []byte, raddr net.Addr)
 	laddr    *net.UDPAddr
 	raddr    *net.UDPAddr
 	logger   log.Logger
 }
 
-func NewRtpUDPStream(bind string, portMin, portMax int, callback func(pkt []byte), logger log.Logger) *RtpUDPStream {
+func NewRtpUDPStream(bind string, portMin, portMax int, callback func(pkt []byte, raddr net.Addr), logger log.Logger) *RtpUDPStream {
 	lAddr := &net.UDPAddr{IP: net.ParseIP(bind), Port: 0}
 	var err error
 	conn, err := util.ListenUDPInPortRange(portMin, portMax, lAddr)
@@ -57,7 +57,7 @@ func (r *RtpUDPStream) Close() {
 }
 
 func (r *RtpUDPStream) Send(pkt []byte, raddr *net.UDPAddr) (int, error) {
-	r.Log().Infof("Send: raddr %v", raddr.String())
+	r.Log().Debugf("Send to %v, length %d", raddr.String(), len(pkt))
 	r.raddr = raddr
 	return r.conn.WriteToUDP(pkt, raddr)
 }
@@ -81,7 +81,7 @@ func (r *RtpUDPStream) Read() {
 		r.Log().Tracef("Read rtp from: %v, length: %d", raddr.String(), n)
 
 		if !r.stop {
-			r.onPacket(buf[0:n])
+			r.onPacket(buf[0:n], raddr)
 		}
 	}
 }
