@@ -28,7 +28,7 @@ type UserAgent struct {
 	InviteStateHandler   session.InviteSessionHandler
 	RegisterStateHandler account.RegisterHandler
 	config               *UserAgentConfig
-	iss                  sync.Map
+	iss                  sync.Map /*Invite Session*/
 	log                  log.Logger
 }
 
@@ -323,7 +323,6 @@ func (ua *UserAgent) handleBye(request sip.Request, tx sip.ServerTransaction) {
 			is := v.(*session.Session)
 			ua.iss.Delete(*callID)
 			var transaction sip.Transaction = tx.(sip.Transaction)
-			is.SetState(session.Terminated)
 			ua.handleInviteState(is, &request, nil, session.Terminated, &transaction)
 		}
 	}
@@ -586,10 +585,12 @@ func (ua *UserAgent) RequestWithContext(ctx context.Context, request sip.Request
 				callID, ok := response.CallID()
 				if ok {
 					if v, found := ua.iss.Load(*callID); found {
-						// handle Ringing or Processing with sdp
-						is := v.(*session.Session)
-						is.SetState(session.Confirmed)
-						ua.handleInviteState(is, &request, &response, session.Confirmed, nil)
+						if request.IsInvite() {
+							// handle Ringing or Processing with sdp
+							is := v.(*session.Session)
+							is.SetState(session.Confirmed)
+							ua.handleInviteState(is, &request, &response, session.Confirmed, nil)
+						}
 					}
 				}
 				return response, nil
