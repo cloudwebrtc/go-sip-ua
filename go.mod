@@ -10,7 +10,6 @@ require (
 	github.com/google/uuid v1.1.3
 	github.com/mgutz/ansi v0.0.0-20200706080929-d51e80ef957d // indirect
 	github.com/pixelbender/go-sdp v1.1.0
-	github.com/rs/zerolog v1.20.0
 	github.com/sirupsen/logrus v1.7.0
 	github.com/x-cray/logrus-prefixed-formatter v0.5.2
 )
