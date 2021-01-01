@@ -44,7 +44,7 @@ const (
 
 type InviteSessionHandler func(s *Session, req *sip.Request, resp *sip.Response, status Status)
 
-type RequestCallback func(ctx context.Context, request sip.Request, authorizer sip.Authorizer) (sip.Response, error)
+type RequestCallback func(ctx context.Context, request sip.Request, authorizer sip.Authorizer, waitForResult bool) (sip.Response, error)
 
 type Session struct {
 	requestCallbck RequestCallback
@@ -221,7 +221,7 @@ func (s *Session) ReInvite() {
 func (s *Session) Bye() {
 	bye := s.makeByeRequest(s.uaType, sip.MessageID(s.callID), s.request, s.response)
 	logger.Infof(s.uaType+" build request: %v => \n%v", sip.BYE, bye)
-	s.requestCallbck(context.TODO(), bye, nil)
+	s.requestCallbck(context.TODO(), bye, nil, false)
 }
 
 // Reject Reject incoming call or for re-INVITE or UPDATE,

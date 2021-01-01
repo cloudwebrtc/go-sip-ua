@@ -17,8 +17,8 @@ import (
 )
 
 type B2BCall struct {
-	source *session.Session
-	dest   *session.Session
+	src  *session.Session
+	dest *session.Session
 }
 
 // B2BUA .
@@ -117,7 +117,7 @@ func NewB2BUA() *B2BUA {
 					logger.Errorf("B-Leg session error: %v", err)
 					continue
 				}
-				b.sessions = append(b.sessions, &B2BCall{source: sess, dest: dest})
+				b.sessions = append(b.sessions, &B2BCall{src: sess, dest: dest})
 			}
 			break
 		// Received re-INVITE or UPDATE.
@@ -139,9 +139,9 @@ func NewB2BUA() *B2BUA {
 			if call != nil && call.dest == sess {
 				sdp := (*resp).Body()
 				if len(sdp) > 0 {
-					call.source.ProvideAnswer(sdp)
+					call.src.ProvideAnswer(sdp)
 				}
-				call.source.Provisional((*resp).StatusCode(), (*resp).Reason())
+				call.src.Provisional((*resp).StatusCode(), (*resp).Reason())
 			}
 			break
 		// Handle 200OK or ACK
@@ -149,8 +149,8 @@ func NewB2BUA() *B2BUA {
 			call := b.findB2BCall(sess)
 			if call != nil && call.dest == sess {
 				sdp := (*resp).Body()
-				call.source.ProvideAnswer(sdp)
-				call.source.Accept(200)
+				call.src.ProvideAnswer(sdp)
+				call.src.Accept(200)
 			}
 			break
 
@@ -162,10 +162,10 @@ func NewB2BUA() *B2BUA {
 		case session.Terminated:
 			call := b.findB2BCall(sess)
 			if call != nil {
-				if call.source == sess {
+				if call.src == sess {
 					call.dest.End()
 				} else if call.dest == sess {
-					call.source.End()
+					call.src.End()
 				}
 			}
 			b.deleteB2BCall(sess)
@@ -185,7 +185,7 @@ func NewB2BUA() *B2BUA {
 
 func (b *B2BUA) findB2BCall(sess *session.Session) *B2BCall {
 	for _, call := range b.sessions {
-		if call.source == sess || call.dest == sess {
+		if call.src == sess || call.dest == sess {
 			return call
 		}
 	}
@@ -194,7 +194,7 @@ func (b *B2BUA) findB2BCall(sess *session.Session) *B2BCall {
 
 func (b *B2BUA) deleteB2BCall(sess *session.Session) {
 	for idx, call := range b.sessions {
-		if call.source == sess || call.dest == sess {
+		if call.src == sess || call.dest == sess {
 			b.sessions = append(b.sessions[:idx], b.sessions[idx+1:]...)
 			return
 		}

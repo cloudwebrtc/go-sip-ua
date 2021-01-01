@@ -240,7 +240,7 @@ func (ua *UserAgent) SendRegister(profile *account.Profile, target sip.SipUri, e
 	if profile.Auth != nil {
 		authorizer = auth.NewClientAuthorizer(profile.Auth.AuthName, profile.Auth.Password)
 	}
-	resp, err := ua.RequestWithContext(context.TODO(), *request, authorizer)
+	resp, err := ua.RequestWithContext(context.TODO(), *request, authorizer, true)
 	ua.handleRegisterState(profile, resp, err)
 }
 
@@ -268,10 +268,11 @@ func (ua *UserAgent) Invite(profile *account.Profile, target sip.SipUri, body *s
 		authorizer = auth.NewClientAuthorizer(profile.Auth.AuthName, profile.Auth.Password)
 	}
 
-	resp, err := ua.RequestWithContext(context.TODO(), *request, authorizer)
+	resp, err := ua.RequestWithContext(context.TODO(), *request, authorizer, false)
 	if err != nil {
 		logger.Errorf("INVITE: Request [INVITE] failed, err => %v", err)
 	}
+
 	if resp != nil {
 		stateCode := resp.StatusCode()
 		logger.Infof("INVITE: resp %d => %s", stateCode, resp.String())
@@ -288,7 +289,7 @@ func (ua *UserAgent) Invite(profile *account.Profile, target sip.SipUri, body *s
 }
 
 func (ua *UserAgent) Request(req *sip.Request) {
-	ua.config.Endpoint.RequestWithContext(context.TODO(), *req, nil)
+	ua.config.Endpoint.Request(*req)
 }
 
 func (ua *UserAgent) SendBye(profile *account.Profile, callID *sip.CallID, target sip.SipUri) {
@@ -308,7 +309,7 @@ func (ua *UserAgent) SendBye(profile *account.Profile, callID *sip.CallID, targe
 	if profile.Auth != nil {
 		authorizer = auth.NewClientAuthorizer(profile.Auth.AuthName, profile.Auth.Password)
 	}
-	ua.config.Endpoint.RequestWithContext(context.TODO(), *request, authorizer)
+	ua.RequestWithContext(context.TODO(), *request, authorizer, false)
 }
 
 func (ua *UserAgent) handleBye(request sip.Request, tx sip.ServerTransaction) {
@@ -410,14 +411,14 @@ func (ua *UserAgent) handleInvite(request sip.Request, tx sip.ServerTransaction)
 }
 
 // RequestWithContext .
-func (ua *UserAgent) RequestWithContext(ctx context.Context, request sip.Request, authorizer sip.Authorizer) (sip.Response, error) {
+func (ua *UserAgent) RequestWithContext(ctx context.Context, request sip.Request, authorizer sip.Authorizer, waitForResult bool) (sip.Response, error) {
 	e := ua.config.Endpoint
 	tx, err := e.Request(request)
 	if err != nil {
 		return nil, err
 	}
 
-	if request.Method() == sip.INVITE {
+	if request.IsInvite() {
 		callID, ok := request.CallID()
 		if ok {
 			var transaction sip.Transaction = tx.(sip.Transaction)
@@ -526,7 +527,7 @@ func (ua *UserAgent) RequestWithContext(ctx context.Context, request sip.Request
 						errs <- err
 						return
 					}
-					if response, err := ua.config.Endpoint.RequestWithContext(ctx, request, nil); err == nil {
+					if response, err := ua.RequestWithContext(ctx, request, nil, true); err == nil {
 						responses <- response
 					} else {
 						errs <- err
@@ -544,7 +545,7 @@ func (ua *UserAgent) RequestWithContext(ctx context.Context, request sip.Request
 		}
 	}()
 
-	waitForResult := func() (sip.Response, error) {
+	waitForResponse := func() (sip.Response, error) {
 		for {
 			select {
 			case provisional := <-provisionals:
@@ -598,15 +599,11 @@ func (ua *UserAgent) RequestWithContext(ctx context.Context, request sip.Request
 		}
 	}
 
-	if request.IsInvite() {
-		go waitForResult()
+	if !waitForResult {
+		go waitForResponse()
 		return nil, err
 	}
-	return waitForResult()
-}
-
-func (ua *UserAgent) RemoveSess(callID *sip.CallID) {
-	ua.iss.Delete(*callID)
+	return waitForResponse()
 }
 
 func (ua *UserAgent) Shutdown() {
