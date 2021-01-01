@@ -112,7 +112,7 @@ func NewSipStack(config *SipStackConfig, logger log.Logger) *SipStack {
 		extensions = config.Extensions
 	}
 
-	gs := &SipStack{
+	s := &SipStack{
 		listenPorts:     make(map[string]*sip.Port),
 		host:            host,
 		ip:              ip,
@@ -125,114 +125,114 @@ func NewSipStack(config *SipStackConfig, logger log.Logger) *SipStack {
 	}
 
 	if config.ServerAuthManager.Authenticator != nil {
-		gs.authenticator = &config.ServerAuthManager
+		s.authenticator = &config.ServerAuthManager
 	}
 
-	gs.log = logger.WithFields(log.Fields{
-		"sip_server_ptr": fmt.Sprintf("%p", gs),
+	s.log = logger.WithFields(log.Fields{
+		"sip_server_ptr": fmt.Sprintf("%p", s),
 	})
-	gs.tp = transport.NewLayer(ip, dnsResolver, config.MsgMapper, gs.Log())
-	gs.tx = transaction.NewLayer(gs.tp, utils.NewLogrusLogger(logrus.ErrorLevel) /*gs.Log().WithFields(gs.tp.Log().Fields())*/)
+	s.tp = transport.NewLayer(ip, dnsResolver, config.MsgMapper, s.Log())
+	s.tx = transaction.NewLayer(s.tp, utils.NewLogrusLogger(logrus.ErrorLevel) /*s.Log().WithFields(s.tp.Log().Fields())*/)
 
-	go gs.serve()
+	go s.serve()
 
-	return gs
+	return s
 }
 
 // Log .
-func (gs *SipStack) Log() log.Logger {
-	return gs.log
+func (s *SipStack) Log() log.Logger {
+	return s.log
 }
 
 // Listen ListenAndServe starts serving listeners on the provided address
-func (gs *SipStack) Listen(protocol string, listenAddr string, options *transport.TLSConfig) error {
+func (s *SipStack) Listen(protocol string, listenAddr string, options *transport.TLSConfig) error {
 	network := strings.ToUpper(protocol)
-	err := gs.tp.Listen(network, listenAddr, options)
+	err := s.tp.Listen(network, listenAddr, options)
 	if err == nil {
 		target, err := transport.NewTargetFromAddr(listenAddr)
 		if err != nil {
 			return err
 		}
 		target = transport.FillTargetHostAndPort(network, target)
-		if _, ok := gs.listenPorts[network]; !ok {
-			gs.listenPorts[network] = target.Port
+		if _, ok := s.listenPorts[network]; !ok {
+			s.listenPorts[network] = target.Port
 		}
 	}
 	return err
 }
 
-func (gs *SipStack) serve() {
-	defer gs.Shutdown()
+func (s *SipStack) serve() {
+	defer s.Shutdown()
 
 	for {
 		select {
-		case tx, ok := <-gs.tx.Requests():
+		case tx, ok := <-s.tx.Requests():
 			if !ok {
 				return
 			}
-			gs.hwg.Add(1)
-			go gs.handleRequest(tx.Origin(), tx)
-		case ack, ok := <-gs.tx.Acks():
+			s.hwg.Add(1)
+			go s.handleRequest(tx.Origin(), tx)
+		case ack, ok := <-s.tx.Acks():
 			if !ok {
 				return
 			}
-			gs.hwg.Add(1)
-			go gs.handleRequest(ack, nil)
-		case response, ok := <-gs.tx.Responses():
+			s.hwg.Add(1)
+			go s.handleRequest(ack, nil)
+		case response, ok := <-s.tx.Responses():
 			if !ok {
 				return
 			}
-			logger := gs.Log().WithFields(map[string]interface{}{
+			logger := s.Log().WithFields(map[string]interface{}{
 				"sip_response": response.Short(),
 			})
 			logger.Warn("received not matched response")
 			if key, err := transaction.MakeClientTxKey(response); err == nil {
-				gs.invitesLock.RLock()
-				inviteRequest, ok := gs.invites[key]
-				gs.invitesLock.RUnlock()
+				s.invitesLock.RLock()
+				inviteRequest, ok := s.invites[key]
+				s.invitesLock.RUnlock()
 				if ok {
-					go gs.AckInviteRequest(inviteRequest, response)
+					go s.AckInviteRequest(inviteRequest, response)
 				}
 			}
-		case err, ok := <-gs.tx.Errors():
+		case err, ok := <-s.tx.Errors():
 			if !ok {
 				return
 			}
-			gs.Log().Errorf("received SIP transaction error: %s", err)
-		case err, ok := <-gs.tp.Errors():
+			s.Log().Errorf("received SIP transaction error: %s", err)
+		case err, ok := <-s.tp.Errors():
 			if !ok {
 				return
 			}
 
-			gs.Log().Errorf("received SIP transport error: %s", err)
+			s.Log().Errorf("received SIP transport error: %s", err)
 		}
 	}
 }
 
-func (gs *SipStack) handleRequest(req sip.Request, tx sip.ServerTransaction) {
-	defer gs.hwg.Done()
+func (s *SipStack) handleRequest(req sip.Request, tx sip.ServerTransaction) {
+	defer s.hwg.Done()
 
-	logger := gs.Log().WithFields(req.Fields())
+	logger := s.Log().WithFields(req.Fields())
 	logger.Info("routing incoming SIP request...")
 
-	gs.hmu.RLock()
-	handler, ok := gs.requestHandlers[req.Method()]
-	gs.hmu.RUnlock()
+	s.hmu.RLock()
+	handler, ok := s.requestHandlers[req.Method()]
+	s.hmu.RUnlock()
 
 	if !ok {
 		logger.Warnf("SIP request handler not found")
 
 		res := sip.NewResponseFromRequest("", req, 405, "Method Not Allowed", "")
-		if _, err := gs.Respond(res); err != nil {
+		if _, err := s.Respond(res); err != nil {
 			logger.Errorf("respond '405 Method Not Allowed' failed: %s", err)
 		}
 
 		return
 	}
 
-	if gs.authenticator != nil {
-		authenticator := gs.authenticator.Authenticator
-		requiresChallenge := gs.authenticator.RequiresChallenge
+	if s.authenticator != nil {
+		authenticator := s.authenticator.Authenticator
+		requiresChallenge := s.authenticator.RequiresChallenge
 		if requiresChallenge(req) == true {
 			go func() {
 				if _, ok := authenticator.Authenticate(req, tx); ok {
@@ -247,16 +247,16 @@ func (gs *SipStack) handleRequest(req sip.Request, tx sip.ServerTransaction) {
 }
 
 //Request Send SIP message
-func (gs *SipStack) Request(req sip.Request) (sip.ClientTransaction, error) {
-	if gs.shuttingDown() {
+func (s *SipStack) Request(req sip.Request) (sip.ClientTransaction, error) {
+	if s.shuttingDown() {
 		return nil, fmt.Errorf("can not send through stopped server")
 	}
 
-	return gs.tx.Request(gs.prepareRequest(req))
+	return s.tx.Request(s.prepareRequest(req))
 }
 
-func (gs SipStack) GetNetworkInfo(protocol string) *transport.Target {
-	logger := gs.Log()
+func (s SipStack) GetNetworkInfo(protocol string) *transport.Target {
+	logger := s.Log()
 
 	var target transport.Target
 	if v, err := util.ResolveSelfIP(); err == nil {
@@ -266,7 +266,7 @@ func (gs SipStack) GetNetworkInfo(protocol string) *transport.Target {
 	}
 
 	network := strings.ToUpper(protocol)
-	if p, ok := gs.listenPorts[network]; ok {
+	if p, ok := s.listenPorts[network]; ok {
 		target.Port = p
 	} else {
 		defPort := transport.DefaultPort(network)
@@ -275,32 +275,32 @@ func (gs SipStack) GetNetworkInfo(protocol string) *transport.Target {
 	return &target
 }
 
-func (gs *SipStack) RememberInviteRequest(request sip.Request) {
+func (s *SipStack) RememberInviteRequest(request sip.Request) {
 	if key, err := transaction.MakeClientTxKey(request); err == nil {
-		gs.invitesLock.Lock()
-		gs.invites[key] = request
-		gs.invitesLock.Unlock()
+		s.invitesLock.Lock()
+		s.invites[key] = request
+		s.invitesLock.Unlock()
 
 		time.AfterFunc(time.Minute, func() {
-			gs.invitesLock.Lock()
-			delete(gs.invites, key)
-			gs.invitesLock.Unlock()
+			s.invitesLock.Lock()
+			delete(s.invites, key)
+			s.invitesLock.Unlock()
 		})
 	} else {
-		gs.Log().WithFields(map[string]interface{}{
+		s.Log().WithFields(map[string]interface{}{
 			"sip_request": request.Short(),
 		}).Errorf("remember of the request failed: %s", err)
 	}
 }
 
-func (gs *SipStack) AckInviteRequest(request sip.Request, response sip.Response) {
+func (s *SipStack) AckInviteRequest(request sip.Request, response sip.Response) {
 	ackRequest := sip.NewAckRequest("", request, response, log.Fields{
 		"sent_at": time.Now(),
 	})
 	ackRequest.SetSource(request.Source())
 	ackRequest.SetDestination(request.Destination())
-	if err := gs.Send(ackRequest); err != nil {
-		gs.Log().WithFields(map[string]interface{}{
+	if err := s.Send(ackRequest); err != nil {
+		s.Log().WithFields(map[string]interface{}{
 			"invite_request":  request.Short(),
 			"invite_response": response.Short(),
 			"ack_request":     ackRequest.Short(),
@@ -308,12 +308,12 @@ func (gs *SipStack) AckInviteRequest(request sip.Request, response sip.Response)
 	}
 }
 
-func (gs *SipStack) CancelRequest(request sip.Request, response sip.Response) {
+func (s *SipStack) CancelRequest(request sip.Request, response sip.Response) {
 	cancelRequest := sip.NewCancelRequest("", request, log.Fields{
 		"sent_at": time.Now(),
 	})
-	if err := gs.Send(cancelRequest); err != nil {
-		gs.Log().WithFields(map[string]interface{}{
+	if err := s.Send(cancelRequest); err != nil {
+		s.Log().WithFields(map[string]interface{}{
 			"invite_request":  request.Short(),
 			"invite_response": response.Short(),
 			"cancel_request":  cancelRequest.Short(),
@@ -321,7 +321,7 @@ func (gs *SipStack) CancelRequest(request sip.Request, response sip.Response) {
 	}
 }
 
-func (gs *SipStack) prepareRequest(req sip.Request) sip.Request {
+func (s *SipStack) prepareRequest(req sip.Request) sip.Request {
 	if viaHop, ok := req.ViaHop(); ok {
 		if viaHop.Params == nil {
 			viaHop.Params = sip.NewParams()
@@ -342,22 +342,22 @@ func (gs *SipStack) prepareRequest(req sip.Request) sip.Request {
 		}, "Route")
 	}
 
-	gs.appendAutoHeaders(req)
+	s.appendAutoHeaders(req)
 
 	return req
 }
 
 // Respond .
-func (gs *SipStack) Respond(res sip.Response) (sip.ServerTransaction, error) {
-	if gs.shuttingDown() {
+func (s *SipStack) Respond(res sip.Response) (sip.ServerTransaction, error) {
+	if s.shuttingDown() {
 		return nil, fmt.Errorf("can not send through stopped server")
 	}
 
-	return gs.tx.Respond(gs.prepareResponse(res))
+	return s.tx.Respond(s.prepareResponse(res))
 }
 
 // RespondOnRequest .
-func (gs *SipStack) RespondOnRequest(
+func (s *SipStack) RespondOnRequest(
 	request sip.Request,
 	status sip.StatusCode,
 	reason, body string,
@@ -368,7 +368,7 @@ func (gs *SipStack) RespondOnRequest(
 		response.AppendHeader(header)
 	}
 
-	tx, err := gs.Respond(response)
+	tx, err := s.Respond(response)
 	if err != nil {
 		return nil, fmt.Errorf("respond '%d %s' failed: %w", response.StatusCode(), response.Reason(), err)
 	}
@@ -377,59 +377,59 @@ func (gs *SipStack) RespondOnRequest(
 }
 
 // Send .
-func (gs *SipStack) Send(msg sip.Message) error {
-	if gs.shuttingDown() {
+func (s *SipStack) Send(msg sip.Message) error {
+	if s.shuttingDown() {
 		return fmt.Errorf("can not send through stopped server")
 	}
 
 	switch m := msg.(type) {
 	case sip.Request:
-		msg = gs.prepareRequest(m)
+		msg = s.prepareRequest(m)
 	case sip.Response:
-		msg = gs.prepareResponse(m)
+		msg = s.prepareResponse(m)
 	}
 
-	return gs.tp.Send(msg)
+	return s.tp.Send(msg)
 }
 
-func (gs *SipStack) prepareResponse(res sip.Response) sip.Response {
-	gs.appendAutoHeaders(res)
+func (s *SipStack) prepareResponse(res sip.Response) sip.Response {
+	s.appendAutoHeaders(res)
 
 	return res
 }
 
-func (gs *SipStack) shuttingDown() bool {
-	return atomic.LoadInt32(&gs.inShutdown) != 0
+func (s *SipStack) shuttingDown() bool {
+	return atomic.LoadInt32(&s.inShutdown) != 0
 }
 
 // Shutdown gracefully shutdowns SIP server
-func (gs *SipStack) Shutdown() {
-	if gs.shuttingDown() {
+func (s *SipStack) Shutdown() {
+	if s.shuttingDown() {
 		return
 	}
 
-	atomic.AddInt32(&gs.inShutdown, 1)
-	defer atomic.AddInt32(&gs.inShutdown, -1)
+	atomic.AddInt32(&s.inShutdown, 1)
+	defer atomic.AddInt32(&s.inShutdown, -1)
 	// stop transaction layer
-	gs.tx.Cancel()
-	<-gs.tx.Done()
+	s.tx.Cancel()
+	<-s.tx.Done()
 	// stop transport layer
-	gs.tp.Cancel()
-	<-gs.tp.Done()
+	s.tp.Cancel()
+	<-s.tp.Done()
 	// wait for handlers
-	gs.hwg.Wait()
+	s.hwg.Wait()
 }
 
 // OnRequest registers new request callback
-func (gs *SipStack) OnRequest(method sip.RequestMethod, handler RequestHandler) error {
-	gs.hmu.Lock()
-	gs.requestHandlers[method] = handler
-	gs.hmu.Unlock()
+func (s *SipStack) OnRequest(method sip.RequestMethod, handler RequestHandler) error {
+	s.hmu.Lock()
+	s.requestHandlers[method] = handler
+	s.hmu.Unlock()
 
 	return nil
 }
 
-func (gs *SipStack) appendAutoHeaders(msg sip.Message) {
+func (s *SipStack) appendAutoHeaders(msg sip.Message) {
 	autoAppendMethods := map[sip.RequestMethod]bool{
 		sip.INVITE:   true,
 		sip.REGISTER: true,
@@ -452,7 +452,7 @@ func (gs *SipStack) appendAutoHeaders(msg sip.Message) {
 			hdrs := msg.GetHeaders("Allow")
 			if len(hdrs) == 0 {
 				allow := make(sip.AllowHeader, 0)
-				for _, method := range gs.getAllowedMethods() {
+				for _, method := range s.getAllowedMethods() {
 					allow = append(allow, method)
 				}
 
@@ -462,7 +462,7 @@ func (gs *SipStack) appendAutoHeaders(msg sip.Message) {
 			hdrs = msg.GetHeaders("Supported")
 			if len(hdrs) == 0 {
 				msg.AppendHeader(&sip.SupportedHeader{
-					Options: gs.extensions,
+					Options: s.extensions,
 				})
 			}
 		}
@@ -474,7 +474,7 @@ func (gs *SipStack) appendAutoHeaders(msg sip.Message) {
 	}
 }
 
-func (gs *SipStack) getAllowedMethods() []sip.RequestMethod {
+func (s *SipStack) getAllowedMethods() []sip.RequestMethod {
 	methods := []sip.RequestMethod{
 		sip.INVITE,
 		sip.ACK,
@@ -492,13 +492,13 @@ func (gs *SipStack) getAllowedMethods() []sip.RequestMethod {
 		sip.OPTIONS: true,
 	}
 
-	gs.hmu.RLock()
-	for method := range gs.requestHandlers {
+	s.hmu.RLock()
+	for method := range s.requestHandlers {
 		if _, ok := added[method]; !ok {
 			methods = append(methods, method)
 		}
 	}
-	gs.hmu.RUnlock()
+	s.hmu.RUnlock()
 
 	return methods
 }
