@@ -49,7 +49,7 @@ func NewB2BUA() *B2BUA {
 		Extensions: []string{"replaces", "outbound"},
 		Dns:        "8.8.8.8",
 		ServerAuthManager: endpoint.ServerAuthManager{
-			Authenticator:     auth.NewServerAuthorizer(b.requestCredential, false, logger),
+			Authenticator:     auth.NewServerAuthorizer(b.requestCredential, "b2bua", false, logger),
 			RequiresChallenge: b.requiresChallenge,
 		},
 	}, logger)
@@ -80,6 +80,15 @@ func NewB2BUA() *B2BUA {
 	ua.InviteStateHandler = func(sess *invite.Session, req *sip.Request, resp *sip.Response, state invite.Status) {
 		logger.Infof("InviteStateHandler: state => %v, type => %s", state, sess.Direction())
 
+		/*
+			if state == invite.InviteReceived {
+				sess.Provisional(180, "Ringing")
+				answer := "sdp ...."
+				sess.ProvideAnswer(answer)
+				sess.Accept(200)
+			}
+		*/
+
 		switch state {
 		// Received incoming call.
 		case invite.InviteReceived:
@@ -105,11 +114,47 @@ func NewB2BUA() *B2BUA {
 				sdp := (*req).Body()
 				dest, err := ua.Invite(profile, target, &sdp)
 				if err != nil {
-					logger.Errorf("B leg session error: %v", err)
-					return
+					logger.Errorf("B-Leg session error: %v", err)
+					continue
 				}
 				b.sessions = append(b.sessions, &B2BCall{source: sess, dest: dest})
 			}
+			break
+		// Received re-INVITE or UPDATE.
+		case invite.ReInviteReceived:
+			logger.Infof("re-INVITE")
+			switch sess.Direction() {
+			case invite.Incoming:
+				sess.Accept(200)
+			case invite.Outgoing:
+				//TODO: Need to provide correct answer.
+			}
+			break
+
+		// Handle 1XX
+		case invite.EarlyMedia:
+			fallthrough
+		case invite.Provisional:
+			call := b.findB2BCall(sess)
+			if call != nil && call.dest == sess {
+				sdp := (*resp).Body()
+				if len(sdp) > 0 {
+					call.source.ProvideAnswer(sdp)
+				}
+				call.source.Provisional((*resp).StatusCode(), (*resp).Reason())
+			}
+			break
+		// Handle 200OK or ACK
+		case invite.Confirmed:
+			call := b.findB2BCall(sess)
+			if call != nil && call.dest == sess {
+				sdp := (*resp).Body()
+				call.source.ProvideAnswer(sdp)
+				call.source.Accept(200)
+			}
+			break
+
+		// Handle errors
 		case invite.Failure:
 			fallthrough
 		case invite.Canceled:
@@ -125,40 +170,8 @@ func NewB2BUA() *B2BUA {
 			}
 			b.deleteB2BCall(sess)
 			break
-		case invite.EarlyMedia:
-			fallthrough
-		case invite.Provisional:
-			call := b.findB2BCall(sess)
-			if call != nil && call.dest == sess {
-				sdp := (*resp).Body()
-				if len(sdp) > 0 {
-					call.source.ProvideAnswer(sdp)
-				}
-				call.source.Provisional((*resp).StatusCode(), (*resp).Reason())
-			}
-			break
-		case invite.Confirmed:
 
-			call := b.findB2BCall(sess)
-			if call != nil && call.dest == sess {
-				sdp := (*resp).Body()
-				call.source.ProvideAnswer(sdp)
-				call.source.Accept(200)
-			}
-			break
 		}
-		/*
-			if state == invite.Offer {
-				sess.ProvideAnswer(answer)
-				sess.Accept(200)
-			}
-
-			if state == invite.InviteReceived {
-				sess.Provisional(180, "Ringing")
-				sess.ProvideAnswer(answer)
-				sess.Accept(200)
-			}
-		*/
 	}
 
 	ua.RegisterStateHandler = func(state account.RegisterState) {

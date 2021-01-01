@@ -29,15 +29,17 @@ type ServerAuthorizer struct {
 	sessions      map[string]AuthSession
 	handleAccount func(username string) (string, error)
 	useAuthInt    bool
+	realm         string
 	log           log.Logger
 }
 
 // NewServerAuthorizer .
-func NewServerAuthorizer(callback func(username string) (string, error), authInt bool, logger log.Logger) *ServerAuthorizer {
+func NewServerAuthorizer(callback func(username string) (string, error), realm string, authInt bool, logger log.Logger) *ServerAuthorizer {
 	auth := &ServerAuthorizer{
 		sessions:      make(map[string]AuthSession),
 		handleAccount: callback,
 		useAuthInt:    authInt,
+		realm:         realm,
 	}
 	auth.log = logger.WithPrefix("ServerAuthorizer")
 	return auth
@@ -82,7 +84,7 @@ func (auth *ServerAuthorizer) requestAuthentication(request sip.Request, tx sip.
 	opaque := generateNonce(4)
 
 	digest := sip.NewParams()
-	digest.Add("realm", sip.String{Str: "\"" + from.Address.Host() + "\""})
+	digest.Add("realm", sip.String{Str: "\"" + auth.realm + "\""})
 	if auth.useAuthInt {
 		digest.Add("qop", sip.String{Str: "\"auth,auth-int\""})
 	} else {

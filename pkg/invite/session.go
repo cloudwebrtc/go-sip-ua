@@ -4,11 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/cloudwebrtc/go-sip-ua/pkg/endpoint"
-
 	"github.com/ghettovoice/gosip/log"
 	"github.com/ghettovoice/gosip/sip"
-	gosip_util "github.com/ghettovoice/gosip/util"
+	"github.com/ghettovoice/gosip/util"
 )
 
 var (
@@ -22,11 +20,10 @@ func init() {
 type Status string
 
 const (
-	Null             Status = "Null"
 	InviteSent       Status = "InviteSent"       /**< After INVITE s sent */
 	InviteReceived   Status = "InviteReceived"   /**< After INVITE s received. */
 	ReInviteReceived Status = "ReInviteReceived" /**< After re-INVITE/UPDATE s received */
-	//Answer         Status = "Answer"         /**< After response for re-INVITE/UPDATE. */
+	//Answer         Status = "Answer"           /**< After response for re-INVITE/UPDATE. */
 	Provisional      Status = "Provisional" /**< After response for 1XX. */
 	EarlyMedia       Status = "EarlyMedia"  /**< After response 1XX with sdp. */
 	WaitingForAnswer Status = "WaitingForAnswer"
@@ -47,41 +44,43 @@ const (
 
 type InviteSessionHandler func(s *Session, req *sip.Request, resp *sip.Response, status Status)
 
+type RequestCallback func(ctx context.Context, request sip.Request, authorizer sip.Authorizer) (sip.Response, error)
+
 type Session struct {
-	edp          *endpoint.EndPoint
-	contact      *sip.ContactHeader
-	status       Status
-	callID       sip.CallID
-	offer        string
-	answer       string
-	request      sip.Request
-	response     sip.Response
-	transaction  sip.Transaction
-	direction    Direction
-	uaType       string // UAS | UAC
-	remoteURI    sip.Address
-	localURI     sip.Address
-	remoteTarget sip.Uri
-	userData     *interface{}
+	requestCallbck RequestCallback
+	contact        *sip.ContactHeader
+	status         Status
+	callID         sip.CallID
+	offer          string
+	answer         string
+	request        sip.Request
+	response       sip.Response
+	transaction    sip.Transaction
+	direction      Direction
+	uaType         string // UAS | UAC
+	remoteURI      sip.Address
+	localURI       sip.Address
+	remoteTarget   sip.Uri
+	userData       *interface{}
 }
 
-func NewInviteSession(edp *endpoint.EndPoint, uaType string, contact *sip.ContactHeader, req sip.Request, cid sip.CallID, tx sip.Transaction, dir Direction) *Session {
+func NewInviteSession(reqcb RequestCallback, uaType string, contact *sip.ContactHeader, req sip.Request, cid sip.CallID, tx sip.Transaction, dir Direction) *Session {
 	s := &Session{
-		edp:         edp,
-		uaType:      uaType,
-		callID:      cid,
-		transaction: tx,
-		direction:   dir,
-		contact:     contact,
-		offer:       "",
-		answer:      "",
+		requestCallbck: reqcb,
+		uaType:         uaType,
+		callID:         cid,
+		transaction:    tx,
+		direction:      dir,
+		contact:        contact,
+		offer:          "",
+		answer:         "",
 	}
 
 	to, _ := req.To()
 	from, _ := req.From()
 
 	if to.Params != nil && !to.Params.Has("tag") {
-		to.Params.Add("tag", sip.String{Str: gosip_util.RandString(8)})
+		to.Params.Add("tag", sip.String{Str: util.RandString(8)})
 		req.RemoveHeader("To")
 		req.AppendHeader(to)
 	}
@@ -95,6 +94,7 @@ func NewInviteSession(edp *endpoint.EndPoint, uaType string, contact *sip.Contac
 		s.remoteURI = sip.Address{Uri: to.Address, Params: to.Params}
 		s.remoteTarget = req.Recipient()
 	}
+
 	s.request = req
 	return s
 }
@@ -113,11 +113,11 @@ func (s *Session) Request() sip.Request {
 
 func (s *Session) isInProgress() bool {
 	switch s.status {
-	case Null:
-		fallthrough
 	case InviteSent:
 		fallthrough
 	case Provisional:
+		fallthrough
+	case EarlyMedia:
 		fallthrough
 	case InviteReceived:
 		fallthrough
@@ -143,6 +143,8 @@ func (s *Session) isEstablished() bool {
 
 func (s *Session) isEnded() bool {
 	switch s.status {
+	case Failure:
+		fallthrough
 	case Canceled:
 		fallthrough
 	case Terminated:
@@ -206,11 +208,16 @@ func (s *Session) Info(content *sip.String) {
 
 }
 
+//ReInvite send re-INVITE
+func (s *Session) ReInvite() {
+
+}
+
 //Bye send Bye request.
 func (s *Session) Bye() {
 	bye := s.makeByeRequest(s.uaType, sip.MessageID(s.callID), s.request, s.response)
 	logger.Infof(s.uaType+" build request: %v => \n%v", sip.BYE, bye)
-	s.edp.RequestWithContext(context.TODO(), bye, nil)
+	s.requestCallbck(context.TODO(), bye, nil)
 }
 
 // Reject Reject incoming call or for re-INVITE or UPDATE,
@@ -233,8 +240,6 @@ func (s *Session) End() error {
 
 	switch s.status {
 	// - UAC -
-	case Null:
-		fallthrough
 	case InviteSent:
 		fallthrough
 	case Provisional:
@@ -287,9 +292,10 @@ func (s *Session) Accept(statusCode sip.StatusCode) {
 	}
 
 	response.AppendHeader(s.localURI.AsContactHeader())
-
 	s.response = response
 	tx.Respond(response)
+
+	s.SetState(WaitingForACK)
 }
 
 // Redirect send a 3xx
