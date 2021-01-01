@@ -23,23 +23,25 @@ type AuthSession struct {
 	created time.Time
 }
 
+type RequestCredentialCallback func(username string) (password string, ha1 string, err error)
+
 // ServerAuthorizer Proxy-Authorization | WWW-Authenticate
 type ServerAuthorizer struct {
 	// a map[call id]authSession pair
-	sessions      map[string]AuthSession
-	handleAccount func(username string) (string, error)
-	useAuthInt    bool
-	realm         string
-	log           log.Logger
+	sessions          map[string]AuthSession
+	requestCredential RequestCredentialCallback
+	useAuthInt        bool
+	realm             string
+	log               log.Logger
 }
 
 // NewServerAuthorizer .
-func NewServerAuthorizer(callback func(username string) (string, error), realm string, authInt bool, logger log.Logger) *ServerAuthorizer {
+func NewServerAuthorizer(callback RequestCredentialCallback, realm string, authInt bool, logger log.Logger) *ServerAuthorizer {
 	auth := &ServerAuthorizer{
-		sessions:      make(map[string]AuthSession),
-		handleAccount: callback,
-		useAuthInt:    authInt,
-		realm:         realm,
+		sessions:          make(map[string]AuthSession),
+		requestCredential: callback,
+		useAuthInt:        authInt,
+		realm:             realm,
 	}
 	auth.log = logger.WithPrefix("ServerAuthorizer")
 	return auth
@@ -136,7 +138,7 @@ func (auth *ServerAuthorizer) checkAuthorization(request sip.Request, tx sip.Ser
 	}
 
 	username := from.Address.User().String()
-	password, err := auth.handleAccount(username)
+	password, ha1, err := auth.requestCredential(username)
 	if err != nil {
 		sendResponse(request, tx, 404, "User not found")
 		return "", false
@@ -152,7 +154,9 @@ func (auth *ServerAuthorizer) checkAuthorization(request sip.Request, tx sip.Ser
 	result := ""
 
 	// HA1 = MD5(A1) = MD5(username:realm:password).
-	ha1 := md5Hex(username + ":" + realm.String() + ":" + password)
+	if len(ha1) == 0 {
+		ha1 = md5Hex(username + ":" + realm.String() + ":" + password)
+	}
 
 	if qop != nil && qop.String() == "auth" {
 		// HA2 = MD5(A2) = MD5(method:digestURI).

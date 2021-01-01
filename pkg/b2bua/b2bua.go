@@ -246,12 +246,12 @@ func (b *B2BUA) GetRegistry() registry.Registry {
 	return b.registry
 }
 
-func (b *B2BUA) requestCredential(username string) (string, error) {
+func (b *B2BUA) requestCredential(username string) (string, string, error) {
 	if password, found := b.accounts[username]; found {
 		logger.Infof("Found user %s", username)
-		return password, nil
+		return password, "", nil
 	}
-	return "", fmt.Errorf("username [%s] not found", username)
+	return "", "", fmt.Errorf("username [%s] not found", username)
 }
 
 func (b *B2BUA) handleRegister(request sip.Request, tx sip.ServerTransaction) {
