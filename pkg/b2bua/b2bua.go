@@ -14,6 +14,7 @@ import (
 	"github.com/ghettovoice/gosip/sip"
 	"github.com/ghettovoice/gosip/sip/parser"
 	"github.com/ghettovoice/gosip/transport"
+	"github.com/sirupsen/logrus"
 )
 
 type B2BCall struct {
@@ -39,7 +40,7 @@ var (
 )
 
 func init() {
-	logger = log.NewDefaultLogrusLogger().WithPrefix("B2BUA")
+	logger = util.NewLogrusLogger(logrus.DebugLevel).WithPrefix("B2BUA")
 }
 
 //NewB2BUA .
@@ -94,7 +95,7 @@ func NewB2BUA() *B2BUA {
 		*/
 
 		switch state {
-		// Received incoming call.
+		// Handle incoming call.
 		case session.InviteReceived:
 			to, _ := (*req).To()
 			from, _ := (*req).From()
@@ -124,7 +125,7 @@ func NewB2BUA() *B2BUA {
 				b.calls = append(b.calls, &B2BCall{src: sess, dest: dest})
 			}
 			break
-		// Received re-INVITE or UPDATE.
+		// Handle re-INVITE or UPDATE.
 		case session.ReInviteReceived:
 			logger.Infof("re-INVITE")
 			switch sess.Direction() {
@@ -148,6 +149,7 @@ func NewB2BUA() *B2BUA {
 				call.src.Provisional((*resp).StatusCode(), (*resp).Reason())
 			}
 			break
+
 		// Handle 200OK or ACK
 		case session.Confirmed:
 			call := b.findCall(sess)
@@ -158,7 +160,7 @@ func NewB2BUA() *B2BUA {
 			}
 			break
 
-		// Handle errors
+		// Handle 4XX+
 		case session.Failure:
 			fallthrough
 		case session.Canceled:

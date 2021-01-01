@@ -10,14 +10,12 @@ import (
 	"time"
 
 	"github.com/cloudwebrtc/go-sip-ua/pkg/auth"
-	utils "github.com/cloudwebrtc/go-sip-ua/pkg/util"
 
 	"github.com/ghettovoice/gosip/log"
 	"github.com/ghettovoice/gosip/sip"
 	"github.com/ghettovoice/gosip/transaction"
 	"github.com/ghettovoice/gosip/transport"
 	"github.com/ghettovoice/gosip/util"
-	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -131,8 +129,9 @@ func NewSipStack(config *SipStackConfig, logger log.Logger) *SipStack {
 	s.log = logger.WithFields(log.Fields{
 		"sip_server_ptr": fmt.Sprintf("%p", s),
 	})
-	s.tp = transport.NewLayer(ip, dnsResolver, config.MsgMapper, s.Log())
-	s.tx = transaction.NewLayer(s.tp, utils.NewLogrusLogger(logrus.ErrorLevel) /*s.Log().WithFields(s.tp.Log().Fields())*/)
+
+	s.tp = transport.NewLayer(ip, dnsResolver, config.MsgMapper, logger.WithPrefix("transport.Layer"))
+	s.tx = transaction.NewLayer(s.tp, logger.WithPrefix("transaction.Layer"))
 
 	go s.serve()
 
@@ -217,14 +216,14 @@ func (s *SipStack) handleRequest(req sip.Request, tx sip.ServerTransaction) {
 	defer s.hwg.Done()
 
 	logger := s.Log().WithFields(req.Fields())
-	logger.Info("routing incoming SIP request...")
+	logger.Debugf("routing incoming SIP request...")
 
 	s.hmu.RLock()
 	handler, ok := s.requestHandlers[req.Method()]
 	s.hmu.RUnlock()
 
 	if !ok {
-		logger.Warnf("SIP request handler not found")
+		logger.Warnf("SIP request %v handler not found", req.Method())
 
 		res := sip.NewResponseFromRequest("", req, 405, "Method Not Allowed", "")
 		if _, err := s.Respond(res); err != nil {

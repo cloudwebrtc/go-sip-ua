@@ -6,16 +6,8 @@ import (
 
 	"github.com/ghettovoice/gosip/log"
 	"github.com/ghettovoice/gosip/sip"
-	"github.com/ghettovoice/gosip/util"
+	gosip_util "github.com/ghettovoice/gosip/util"
 )
-
-var (
-	logger log.Logger
-)
-
-func init() {
-	logger = log.NewDefaultLogrusLogger().WithPrefix("session.Session")
-}
 
 type Status string
 
@@ -62,9 +54,12 @@ type Session struct {
 	remoteURI      sip.Address
 	remoteTarget   sip.Uri
 	userData       *interface{}
+	logger         log.Logger
 }
 
-func NewInviteSession(reqcb RequestCallback, uaType string, contact *sip.ContactHeader, req sip.Request, cid sip.CallID, tx sip.Transaction, dir Direction) *Session {
+func NewInviteSession(reqcb RequestCallback, uaType string,
+	contact *sip.ContactHeader, req sip.Request, cid sip.CallID,
+	tx sip.Transaction, dir Direction, logger log.Logger) *Session {
 	s := &Session{
 		requestCallbck: reqcb,
 		uaType:         uaType,
@@ -76,11 +71,13 @@ func NewInviteSession(reqcb RequestCallback, uaType string, contact *sip.Contact
 		contact:        contact,
 	}
 
+	s.logger = logger.WithPrefix("session.Session")
+
 	to, _ := req.To()
 	from, _ := req.From()
 
 	if to.Params != nil && !to.Params.Has("tag") {
-		to.Params.Add("tag", sip.String{Str: util.RandString(8)})
+		to.Params.Add("tag", sip.String{Str: gosip_util.RandString(8)})
 		req.RemoveHeader("To")
 		req.AppendHeader(to)
 	}
@@ -97,6 +94,10 @@ func NewInviteSession(reqcb RequestCallback, uaType string, contact *sip.Contact
 
 	s.request = req
 	return s
+}
+
+func (s *Session) Log() log.Logger {
+	return s.logger
 }
 
 func (s *Session) String() string {
@@ -239,7 +240,7 @@ func (s *Session) Bye() {
 }
 
 func (s *Session) sendRequest(req sip.Request) (sip.Response, error) {
-	logger.Infof(s.uaType+" send request: %v => \n%v", req.Method(), req)
+	s.Log().Debugf(s.uaType+" send request: %v => \n%v", req.Method(), req)
 	return s.requestCallbck(context.TODO(), req, nil, false)
 }
 
@@ -247,7 +248,7 @@ func (s *Session) sendRequest(req sip.Request) (sip.Response, error) {
 func (s *Session) Reject(statusCode sip.StatusCode, reason string) {
 	tx := (s.transaction.(sip.ServerTransaction))
 	request := s.request
-	logger.Infof("Reject: Request => %s, body => %s", request.Short(), request.Body())
+	s.Log().Debugf("Reject: Request => %s, body => %s", request.Short(), request.Body())
 	response := sip.NewResponseFromRequest(request.MessageID(), request, statusCode, reason, "")
 	tx.Respond(response)
 }
@@ -257,7 +258,7 @@ func (s *Session) End() error {
 
 	if s.status == Terminated {
 		err := fmt.Errorf("Invalid status: %v", s.status)
-		logger.Errorf("Session::End() %v", err)
+		s.Log().Errorf("Session::End() %v", err)
 		return err
 	}
 
@@ -268,7 +269,7 @@ func (s *Session) End() error {
 	case Provisional:
 		fallthrough
 	case EarlyMedia:
-		logger.Info("Canceling session.")
+		s.Log().Info("Canceling session.")
 		switch s.transaction.(type) {
 		case sip.ClientTransaction:
 			s.transaction.(sip.ClientTransaction).Cancel()
@@ -282,13 +283,13 @@ func (s *Session) End() error {
 	case WaitingForAnswer:
 		fallthrough
 	case Answered:
-		logger.Info("Rejecting session")
+		s.Log().Info("Rejecting session")
 		s.Reject(603, "Decline")
 
 	case WaitingForACK:
 		fallthrough
 	case Confirmed:
-		logger.Info("Terminating session.")
+		s.Log().Info("Terminating session.")
 		s.Bye()
 	}
 
@@ -300,7 +301,7 @@ func (s *Session) Accept(statusCode sip.StatusCode) {
 	tx := (s.transaction.(sip.ServerTransaction))
 
 	if len(s.answer) == 0 {
-		logger.Errorf("Answer sdp is nil!")
+		s.Log().Errorf("Answer sdp is nil!")
 		return
 	}
 	request := s.request

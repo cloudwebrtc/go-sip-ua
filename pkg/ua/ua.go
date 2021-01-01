@@ -49,6 +49,10 @@ func NewUserAgent(config *UserAgentConfig, logger log.Logger) *UserAgent {
 	return ua
 }
 
+func (ua *UserAgent) Log() log.Logger {
+	return ua.log
+}
+
 func (ua *UserAgent) handleInviteState(is *session.Session, request *sip.Request, response *sip.Response, state session.Status, tx *sip.Transaction) {
 	if request != nil && *request != nil {
 		is.StoreRequest(*request)
@@ -77,7 +81,6 @@ func (ua *UserAgent) BuildRequest(
 	target sip.SipUri,
 	callID *sip.CallID) (*sip.Request, error) {
 
-	logger := ua.log
 	builder := sip.NewRequestBuilder().SetMethod(method).SetFrom(from).SetTo(to).SetRecipient(target.Clone()).AddVia(ua.buildViaHopHeader(target))
 
 	if callID != nil {
@@ -90,11 +93,11 @@ func (ua *UserAgent) BuildRequest(
 
 	req, err := builder.Build()
 	if err != nil {
-		logger.Errorf("err => %v", err)
+		ua.Log().Errorf("err => %v", err)
 		return nil, err
 	}
 
-	logger.Infof("buildRequest %s => %v", method, req)
+	ua.Log().Debugf("buildRequest %s => %v", method, req)
 	return &req, nil
 }
 
@@ -184,10 +187,9 @@ func (ua *UserAgent) buildContact(uri sip.SipUri, instanceID *string) *sip.Addre
 }
 
 func (ua *UserAgent) handleRegisterState(profile *account.Profile, resp sip.Response, err error) {
-	logger := ua.log
 
 	if err != nil {
-		logger.Errorf("Request [%s] failed, err => %v", sip.REGISTER, err)
+		ua.Log().Errorf("Request [%s] failed, err => %v", sip.REGISTER, err)
 		if ua.RegisterStateHandler != nil {
 			reqErr := err.(*sip.RequestError)
 			regState := account.RegisterState{
@@ -202,7 +204,7 @@ func (ua *UserAgent) handleRegisterState(profile *account.Profile, resp sip.Resp
 	}
 	if resp != nil {
 		stateCode := resp.StatusCode()
-		logger.Infof("%s resp %d => %s", sip.REGISTER, stateCode, resp.String())
+		ua.Log().Debugf("%s resp %d => %s", sip.REGISTER, stateCode, resp.String())
 		if ua.RegisterStateHandler != nil {
 			var expires sip.Expires = 0
 			hdrs := resp.GetHeaders("Expires")
@@ -222,7 +224,6 @@ func (ua *UserAgent) handleRegisterState(profile *account.Profile, resp sip.Resp
 }
 
 func (ua *UserAgent) SendRegister(profile *account.Profile, target sip.SipUri, expires uint32) {
-	logger := ua.log
 
 	from := buildFrom(target, profile.User, profile.DisplayName)
 	contact := ua.buildContact(target, &profile.InstanceID)
@@ -230,7 +231,7 @@ func (ua *UserAgent) SendRegister(profile *account.Profile, target sip.SipUri, e
 	to := buildTo(target)
 	request, err := ua.BuildRequest(sip.REGISTER, from, to, contact, target, nil)
 	if err != nil {
-		logger.Errorf("Register: err = %v", err)
+		ua.Log().Errorf("Register: err = %v", err)
 		return
 	}
 	expiresHeader := sip.Expires(expires)
@@ -245,7 +246,6 @@ func (ua *UserAgent) SendRegister(profile *account.Profile, target sip.SipUri, e
 }
 
 func (ua *UserAgent) Invite(profile *account.Profile, target sip.SipUri, body *string) (*session.Session, error) {
-	logger := ua.log
 
 	from := buildFrom(target, profile.User, profile.DisplayName)
 	contact := ua.buildContact(target, &profile.InstanceID)
@@ -253,7 +253,7 @@ func (ua *UserAgent) Invite(profile *account.Profile, target sip.SipUri, body *s
 
 	request, err := ua.BuildRequest(sip.INVITE, from, to, contact, target, nil)
 	if err != nil {
-		logger.Errorf("INVITE: err = %v", err)
+		ua.Log().Errorf("INVITE: err = %v", err)
 		return nil, err
 	}
 
@@ -270,13 +270,13 @@ func (ua *UserAgent) Invite(profile *account.Profile, target sip.SipUri, body *s
 
 	resp, err := ua.RequestWithContext(context.TODO(), *request, authorizer, false)
 	if err != nil {
-		logger.Errorf("INVITE: Request [INVITE] failed, err => %v", err)
+		ua.Log().Errorf("INVITE: Request [INVITE] failed, err => %v", err)
 		return nil, err
 	}
 
 	if resp != nil {
 		stateCode := resp.StatusCode()
-		logger.Infof("INVITE: resp %d => %s", stateCode, resp.String())
+		ua.Log().Debugf("INVITE: resp %d => %s", stateCode, resp.String())
 		return nil, fmt.Errorf("Invite session is unsuccessful, code: %d, reason: %s", stateCode, resp.String())
 	}
 
@@ -295,9 +295,8 @@ func (ua *UserAgent) Request(req *sip.Request) {
 }
 
 func (ua *UserAgent) handleBye(request sip.Request, tx sip.ServerTransaction) {
-	logger := ua.log
 
-	logger.Infof("handleBye: Request => %s, body => %s", request.Short(), request.Body())
+	ua.Log().Debugf("handleBye: Request => %s, body => %s", request.Short(), request.Body())
 	response := sip.NewResponseFromRequest(request.MessageID(), request, 200, "OK", "")
 
 	callID, ok := request.CallID()
@@ -314,8 +313,8 @@ func (ua *UserAgent) handleBye(request sip.Request, tx sip.ServerTransaction) {
 }
 
 func (ua *UserAgent) handleCancel(request sip.Request, tx sip.ServerTransaction) {
-	logger := ua.log
-	logger.Infof("handleCancel: Request => %s, body => %s", request.Short(), request.Body())
+
+	ua.Log().Debugf("handleCancel: Request => %s, body => %s", request.Short(), request.Body())
 	response := sip.NewResponseFromRequest(request.MessageID(), request, 200, "OK", "")
 	tx.Respond(response)
 
@@ -332,8 +331,8 @@ func (ua *UserAgent) handleCancel(request sip.Request, tx sip.ServerTransaction)
 }
 
 func (ua *UserAgent) handleACK(request sip.Request, tx sip.ServerTransaction) {
-	logger := ua.log
-	logger.Infof("handleACK => %s, body => %s", request.Short(), request.Body())
+
+	ua.Log().Debugf("handleACK => %s, body => %s", request.Short(), request.Body())
 	callID, ok := request.CallID()
 	if ok {
 		if v, found := ua.iss.Load(*callID); found {
@@ -346,8 +345,8 @@ func (ua *UserAgent) handleACK(request sip.Request, tx sip.ServerTransaction) {
 }
 
 func (ua *UserAgent) handleInvite(request sip.Request, tx sip.ServerTransaction) {
-	logger := ua.log
-	logger.Infof("handleInvite => %s, body => %s", request.Short(), request.Body())
+
+	ua.Log().Debugf("handleInvite => %s, body => %s", request.Short(), request.Body())
 
 	callID, ok := request.CallID()
 	if ok {
@@ -358,7 +357,7 @@ func (ua *UserAgent) handleInvite(request sip.Request, tx sip.ServerTransaction)
 			ua.handleInviteState(is, &request, nil, session.ReInviteReceived, &transaction)
 		} else {
 			contact, _ := request.Contact()
-			is := session.NewInviteSession(ua.RequestWithContext, "UAS", contact, request, *callID, transaction, session.Incoming)
+			is := session.NewInviteSession(ua.RequestWithContext, "UAS", contact, request, *callID, transaction, session.Incoming, ua.Log())
 			ua.iss.Store(*callID, is)
 			is.SetState(session.InviteReceived)
 			ua.handleInviteState(is, &request, nil, session.InviteReceived, &transaction)
@@ -369,7 +368,7 @@ func (ua *UserAgent) handleInvite(request sip.Request, tx sip.ServerTransaction)
 	go func() {
 		cancel := <-tx.Cancels()
 		if cancel != nil {
-			logger.Infof("Cancel => %s, body => %s", cancel.Short(), cancel.Body())
+			ua.Log().Debugf("Cancel => %s, body => %s", cancel.Short(), cancel.Body())
 			response := sip.NewResponseFromRequest(cancel.MessageID(), cancel, 200, "OK", "")
 			if callID, ok := response.CallID(); ok {
 				if v, found := ua.iss.Load(*callID); found {
@@ -387,7 +386,7 @@ func (ua *UserAgent) handleInvite(request sip.Request, tx sip.ServerTransaction)
 	go func() {
 		ack := <-tx.Acks()
 		if ack != nil {
-			logger.Infof("ack => %v", ack)
+			ua.Log().Debugf("ack => %v", ack)
 		}
 	}()
 }
@@ -406,7 +405,7 @@ func (ua *UserAgent) RequestWithContext(ctx context.Context, request sip.Request
 			var transaction sip.Transaction = tx.(sip.Transaction)
 			if _, found := ua.iss.Load(*callID); !found {
 				contact, _ := request.Contact()
-				is := session.NewInviteSession(ua.RequestWithContext, "UAC", contact, request, *callID, transaction, session.Outgoing)
+				is := session.NewInviteSession(ua.RequestWithContext, "UAC", contact, request, *callID, transaction, session.Outgoing, ua.Log())
 				ua.iss.Store(*callID, is)
 				is.ProvideOffer(request.Body())
 				is.SetState(session.InviteSent)
