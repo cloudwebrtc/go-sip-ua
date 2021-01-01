@@ -27,7 +27,7 @@ type B2BUA struct {
 	accounts map[string]string
 	registry registry.Registry
 	domains  []string
-	sessions []*B2BCall
+	calls    []*B2BCall
 }
 
 var (
@@ -117,7 +117,7 @@ func NewB2BUA() *B2BUA {
 					logger.Errorf("B-Leg session error: %v", err)
 					continue
 				}
-				b.sessions = append(b.sessions, &B2BCall{src: sess, dest: dest})
+				b.calls = append(b.calls, &B2BCall{src: sess, dest: dest})
 			}
 			break
 		// Received re-INVITE or UPDATE.
@@ -135,7 +135,7 @@ func NewB2BUA() *B2BUA {
 		case session.EarlyMedia:
 			fallthrough
 		case session.Provisional:
-			call := b.findB2BCall(sess)
+			call := b.findCall(sess)
 			if call != nil && call.dest == sess {
 				sdp := (*resp).Body()
 				if len(sdp) > 0 {
@@ -146,7 +146,7 @@ func NewB2BUA() *B2BUA {
 			break
 		// Handle 200OK or ACK
 		case session.Confirmed:
-			call := b.findB2BCall(sess)
+			call := b.findCall(sess)
 			if call != nil && call.dest == sess {
 				sdp := (*resp).Body()
 				call.src.ProvideAnswer(sdp)
@@ -160,7 +160,7 @@ func NewB2BUA() *B2BUA {
 		case session.Canceled:
 			fallthrough
 		case session.Terminated:
-			call := b.findB2BCall(sess)
+			call := b.findCall(sess)
 			if call != nil {
 				if call.src == sess {
 					call.dest.End()
@@ -168,7 +168,7 @@ func NewB2BUA() *B2BUA {
 					call.src.End()
 				}
 			}
-			b.deleteB2BCall(sess)
+			b.removeCall(sess)
 			break
 
 		}
@@ -183,8 +183,12 @@ func NewB2BUA() *B2BUA {
 	return b
 }
 
-func (b *B2BUA) findB2BCall(sess *session.Session) *B2BCall {
-	for _, call := range b.sessions {
+func (b *B2BUA) Calls() []*B2BCall {
+	return b.calls
+}
+
+func (b *B2BUA) findCall(sess *session.Session) *B2BCall {
+	for _, call := range b.calls {
 		if call.src == sess || call.dest == sess {
 			return call
 		}
@@ -192,10 +196,10 @@ func (b *B2BUA) findB2BCall(sess *session.Session) *B2BCall {
 	return nil
 }
 
-func (b *B2BUA) deleteB2BCall(sess *session.Session) {
-	for idx, call := range b.sessions {
+func (b *B2BUA) removeCall(sess *session.Session) {
+	for idx, call := range b.calls {
 		if call.src == sess || call.dest == sess {
-			b.sessions = append(b.sessions[:idx], b.sessions[idx+1:]...)
+			b.calls = append(b.calls[:idx], b.calls[idx+1:]...)
 			return
 		}
 	}

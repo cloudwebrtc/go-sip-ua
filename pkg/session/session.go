@@ -48,7 +48,6 @@ type RequestCallback func(ctx context.Context, request sip.Request, authorizer s
 
 type Session struct {
 	requestCallbck RequestCallback
-	contact        *sip.ContactHeader
 	status         Status
 	callID         sip.CallID
 	offer          string
@@ -71,7 +70,6 @@ func NewInviteSession(reqcb RequestCallback, uaType string, contact *sip.Contact
 		callID:         cid,
 		transaction:    tx,
 		direction:      dir,
-		contact:        contact,
 		offer:          "",
 		answer:         "",
 	}
@@ -88,7 +86,6 @@ func NewInviteSession(reqcb RequestCallback, uaType string, contact *sip.Contact
 	if uaType == "UAS" {
 		s.localURI = sip.Address{Uri: to.Address, Params: to.Params}
 		s.remoteURI = sip.Address{Uri: from.Address, Params: from.Params}
-
 		s.remoteTarget = contact.Address
 	} else if uaType == "UAC" {
 		s.localURI = sip.Address{Uri: from.Address, Params: from.Params}
@@ -208,21 +205,36 @@ func (s *Session) ProvideAnswer(sdp string) {
 	s.answer = sdp
 }
 
-//Info Send Info
-func (s *Session) Info(content *sip.String) {
-
+//Info send SIP INFO
+func (s *Session) Info(content string, contentType string) {
+	method := sip.INFO
+	req := s.makeRequest(s.uaType, method, sip.MessageID(s.callID), s.request, s.response)
+	req.SetBody(content, true)
+	hdr := sip.ContentType(contentType)
+	req.AppendHeader(&hdr)
+	s.sendRequest(req)
 }
 
 //ReInvite send re-INVITE
 func (s *Session) ReInvite() {
-
+	method := sip.INVITE
+	req := s.makeRequest(s.uaType, method, sip.MessageID(s.callID), s.request, s.response)
+	req.SetBody(s.offer, true)
+	hdr := sip.ContentType("application/sdp")
+	req.AppendHeader(&hdr)
+	s.sendRequest(req)
 }
 
 //Bye send Bye request.
 func (s *Session) Bye() {
-	bye := s.makeByeRequest(s.uaType, sip.MessageID(s.callID), s.request, s.response)
-	logger.Infof(s.uaType+" build request: %v => \n%v", sip.BYE, bye)
-	s.requestCallbck(context.TODO(), bye, nil, false)
+	method := sip.BYE
+	req := s.makeRequest(s.uaType, method, sip.MessageID(s.callID), s.request, s.response)
+	s.sendRequest(req)
+}
+
+func (s *Session) sendRequest(req sip.Request) (sip.Response, error) {
+	logger.Infof(s.uaType+" send request: %v => \n%v", req.Method(), req)
+	return s.requestCallbck(context.TODO(), req, nil, false)
 }
 
 // Reject Reject incoming call or for re-INVITE or UPDATE,
@@ -330,10 +342,10 @@ func (s *Session) Provisional(statusCode sip.StatusCode, reason string) {
 	tx.Respond(response)
 }
 
-func (s *Session) makeByeRequest(uaType string, msgID sip.MessageID, inviteRequest sip.Request, inviteResponse sip.Response) sip.Request {
+func (s *Session) makeRequest(uaType string, method sip.RequestMethod, msgID sip.MessageID, inviteRequest sip.Request, inviteResponse sip.Response) sip.Request {
 	byeRequest := sip.NewRequest(
 		msgID,
-		sip.BYE,
+		method,
 		s.remoteTarget,
 		inviteRequest.SipVersion(),
 		[]sip.Header{},
@@ -369,7 +381,7 @@ func (s *Session) makeByeRequest(uaType string, msgID sip.MessageID, inviteReque
 	sip.CopyHeaders("CSeq", inviteRequest, byeRequest)
 	cseq, _ := byeRequest.CSeq()
 	cseq.SeqNo++
-	cseq.MethodName = sip.BYE
+	cseq.MethodName = method
 
 	return byeRequest
 }
