@@ -8,7 +8,7 @@ import (
 
 	"github.com/cloudwebrtc/go-sip-ua/pkg/account"
 	"github.com/cloudwebrtc/go-sip-ua/pkg/endpoint"
-	"github.com/cloudwebrtc/go-sip-ua/pkg/invite"
+	"github.com/cloudwebrtc/go-sip-ua/pkg/session"
 	"github.com/cloudwebrtc/go-sip-ua/pkg/ua"
 	"github.com/ghettovoice/gosip/log"
 	"github.com/ghettovoice/gosip/sip"
@@ -44,9 +44,9 @@ func main() {
 		Endpoint:  endpoint,
 	}, logger)
 
-	ua.InviteStateHandler = func(sess *invite.Session, req *sip.Request, resp *sip.Response, state invite.Status) {
+	ua.InviteStateHandler = func(sess *session.Session, req *sip.Request, resp *sip.Response, state session.Status) {
 		logger.Infof("InviteStateHandler: state => %v, type => %s", state, sess.Direction())
-		if state == invite.InviteReceived {
+		if state == session.InviteReceived {
 			sess.ProvideAnswer("")
 			sess.Accept(200)
 		}

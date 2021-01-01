@@ -1,4 +1,4 @@
-package invite
+package session
 
 import "github.com/ghettovoice/gosip/sip"
 

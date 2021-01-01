@@ -6,8 +6,8 @@ import (
 	"github.com/cloudwebrtc/go-sip-ua/pkg/account"
 	"github.com/cloudwebrtc/go-sip-ua/pkg/auth"
 	"github.com/cloudwebrtc/go-sip-ua/pkg/endpoint"
-	"github.com/cloudwebrtc/go-sip-ua/pkg/invite"
 	"github.com/cloudwebrtc/go-sip-ua/pkg/registry"
+	"github.com/cloudwebrtc/go-sip-ua/pkg/session"
 	"github.com/cloudwebrtc/go-sip-ua/pkg/ua"
 	"github.com/cloudwebrtc/go-sip-ua/pkg/util"
 	"github.com/ghettovoice/gosip/log"
@@ -17,8 +17,8 @@ import (
 )
 
 type B2BCall struct {
-	source *invite.Session
-	dest   *invite.Session
+	source *session.Session
+	dest   *session.Session
 }
 
 // B2BUA .
@@ -77,11 +77,11 @@ func NewB2BUA() *B2BUA {
 		Endpoint:  endpoint,
 	}, logger)
 
-	ua.InviteStateHandler = func(sess *invite.Session, req *sip.Request, resp *sip.Response, state invite.Status) {
+	ua.InviteStateHandler = func(sess *session.Session, req *sip.Request, resp *sip.Response, state session.Status) {
 		logger.Infof("InviteStateHandler: state => %v, type => %s", state, sess.Direction())
 
 		/*
-			if state == invite.InviteReceived {
+			if state == session.InviteReceived {
 				sess.Provisional(180, "Ringing")
 				answer := "sdp ...."
 				sess.ProvideAnswer(answer)
@@ -91,7 +91,7 @@ func NewB2BUA() *B2BUA {
 
 		switch state {
 		// Received incoming call.
-		case invite.InviteReceived:
+		case session.InviteReceived:
 			to, _ := (*req).To()
 			from, _ := (*req).From()
 			aor := to.Address
@@ -121,20 +121,20 @@ func NewB2BUA() *B2BUA {
 			}
 			break
 		// Received re-INVITE or UPDATE.
-		case invite.ReInviteReceived:
+		case session.ReInviteReceived:
 			logger.Infof("re-INVITE")
 			switch sess.Direction() {
-			case invite.Incoming:
+			case session.Incoming:
 				sess.Accept(200)
-			case invite.Outgoing:
+			case session.Outgoing:
 				//TODO: Need to provide correct answer.
 			}
 			break
 
 		// Handle 1XX
-		case invite.EarlyMedia:
+		case session.EarlyMedia:
 			fallthrough
-		case invite.Provisional:
+		case session.Provisional:
 			call := b.findB2BCall(sess)
 			if call != nil && call.dest == sess {
 				sdp := (*resp).Body()
@@ -145,7 +145,7 @@ func NewB2BUA() *B2BUA {
 			}
 			break
 		// Handle 200OK or ACK
-		case invite.Confirmed:
+		case session.Confirmed:
 			call := b.findB2BCall(sess)
 			if call != nil && call.dest == sess {
 				sdp := (*resp).Body()
@@ -155,11 +155,11 @@ func NewB2BUA() *B2BUA {
 			break
 
 		// Handle errors
-		case invite.Failure:
+		case session.Failure:
 			fallthrough
-		case invite.Canceled:
+		case session.Canceled:
 			fallthrough
-		case invite.Terminated:
+		case session.Terminated:
 			call := b.findB2BCall(sess)
 			if call != nil {
 				if call.source == sess {
@@ -183,7 +183,7 @@ func NewB2BUA() *B2BUA {
 	return b
 }
 
-func (b *B2BUA) findB2BCall(sess *invite.Session) *B2BCall {
+func (b *B2BUA) findB2BCall(sess *session.Session) *B2BCall {
 	for _, call := range b.sessions {
 		if call.source == sess || call.dest == sess {
 			return call
@@ -192,7 +192,7 @@ func (b *B2BUA) findB2BCall(sess *invite.Session) *B2BCall {
 	return nil
 }
 
-func (b *B2BUA) deleteB2BCall(sess *invite.Session) {
+func (b *B2BUA) deleteB2BCall(sess *session.Session) {
 	for idx, call := range b.sessions {
 		if call.source == sess || call.dest == sess {
 			b.sessions = append(b.sessions[:idx], b.sessions[idx+1:]...)

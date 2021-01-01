@@ -9,7 +9,7 @@ import (
 	"github.com/cloudwebrtc/go-sip-ua/pkg/account"
 	"github.com/cloudwebrtc/go-sip-ua/pkg/auth"
 	"github.com/cloudwebrtc/go-sip-ua/pkg/endpoint"
-	"github.com/cloudwebrtc/go-sip-ua/pkg/invite"
+	"github.com/cloudwebrtc/go-sip-ua/pkg/session"
 
 	"github.com/ghettovoice/gosip/log"
 	"github.com/ghettovoice/gosip/sip"
@@ -25,7 +25,7 @@ type UserAgentConfig struct {
 
 //UserAgent .
 type UserAgent struct {
-	InviteStateHandler   invite.InviteSessionHandler
+	InviteStateHandler   session.InviteSessionHandler
 	RegisterStateHandler account.RegisterHandler
 	config               *UserAgentConfig
 	iss                  sync.Map
@@ -49,7 +49,7 @@ func NewUserAgent(config *UserAgentConfig, logger log.Logger) *UserAgent {
 	return ua
 }
 
-func (ua *UserAgent) handleInviteState(is *invite.Session, request *sip.Request, response *sip.Response, state invite.Status, tx *sip.Transaction) {
+func (ua *UserAgent) handleInviteState(is *session.Session, request *sip.Request, response *sip.Response, state session.Status, tx *sip.Transaction) {
 	if request != nil && *request != nil {
 		is.StoreRequest(*request)
 	}
@@ -244,7 +244,7 @@ func (ua *UserAgent) SendRegister(profile *account.Profile, target sip.SipUri, e
 	ua.handleRegisterState(profile, resp, err)
 }
 
-func (ua *UserAgent) Invite(profile *account.Profile, target sip.SipUri, body *string) (*invite.Session, error) {
+func (ua *UserAgent) Invite(profile *account.Profile, target sip.SipUri, body *string) (*session.Session, error) {
 	logger := ua.log
 
 	from := buildFrom(target, profile.User, profile.DisplayName)
@@ -280,7 +280,7 @@ func (ua *UserAgent) Invite(profile *account.Profile, target sip.SipUri, body *s
 	callID, ok := (*request).CallID()
 	if ok {
 		if v, found := ua.iss.Load(*callID); found {
-			return v.(*invite.Session), nil
+			return v.(*session.Session), nil
 		}
 	}
 
@@ -320,11 +320,11 @@ func (ua *UserAgent) handleBye(request sip.Request, tx sip.ServerTransaction) {
 	callID, ok := request.CallID()
 	if ok {
 		if v, found := ua.iss.Load(*callID); found {
-			is := v.(*invite.Session)
+			is := v.(*session.Session)
 			ua.iss.Delete(*callID)
 			var transaction sip.Transaction = tx.(sip.Transaction)
-			is.SetState(invite.Terminated)
-			ua.handleInviteState(is, &request, nil, invite.Terminated, &transaction)
+			is.SetState(session.Terminated)
+			ua.handleInviteState(is, &request, nil, session.Terminated, &transaction)
 		}
 	}
 
@@ -340,11 +340,11 @@ func (ua *UserAgent) handleCancel(request sip.Request, tx sip.ServerTransaction)
 	callID, ok := request.CallID()
 	if ok {
 		if v, found := ua.iss.Load(*callID); found {
-			is := v.(*invite.Session)
+			is := v.(*session.Session)
 			ua.iss.Delete(*callID)
 			var transaction sip.Transaction = tx.(sip.Transaction)
-			is.SetState(invite.Canceled)
-			ua.handleInviteState(is, &request, nil, invite.Canceled, &transaction)
+			is.SetState(session.Canceled)
+			ua.handleInviteState(is, &request, nil, session.Canceled, &transaction)
 		}
 	}
 }
@@ -356,9 +356,9 @@ func (ua *UserAgent) handleACK(request sip.Request, tx sip.ServerTransaction) {
 	if ok {
 		if v, found := ua.iss.Load(*callID); found {
 			// handle Ringing or Processing with sdp
-			is := v.(*invite.Session)
-			is.SetState(invite.Confirmed)
-			ua.handleInviteState(is, &request, nil, invite.Confirmed, nil)
+			is := v.(*session.Session)
+			is.SetState(session.Confirmed)
+			ua.handleInviteState(is, &request, nil, session.Confirmed, nil)
 		}
 	}
 }
@@ -371,16 +371,16 @@ func (ua *UserAgent) handleInvite(request sip.Request, tx sip.ServerTransaction)
 	if ok {
 		var transaction sip.Transaction = tx.(sip.Transaction)
 		if v, found := ua.iss.Load(*callID); found {
-			is := v.(*invite.Session)
-			is.SetState(invite.ReInviteReceived)
-			ua.handleInviteState(is, &request, nil, invite.ReInviteReceived, &transaction)
+			is := v.(*session.Session)
+			is.SetState(session.ReInviteReceived)
+			ua.handleInviteState(is, &request, nil, session.ReInviteReceived, &transaction)
 		} else {
 			contact, _ := request.Contact()
-			is := invite.NewInviteSession(ua.RequestWithContext, "UAS", contact, request, *callID, transaction, invite.Incoming)
+			is := session.NewInviteSession(ua.RequestWithContext, "UAS", contact, request, *callID, transaction, session.Incoming)
 			ua.iss.Store(*callID, is)
-			is.SetState(invite.InviteReceived)
-			ua.handleInviteState(is, &request, nil, invite.InviteReceived, &transaction)
-			is.SetState(invite.WaitingForAnswer)
+			is.SetState(session.InviteReceived)
+			ua.handleInviteState(is, &request, nil, session.InviteReceived, &transaction)
+			is.SetState(session.WaitingForAnswer)
 		}
 	}
 
@@ -392,9 +392,9 @@ func (ua *UserAgent) handleInvite(request sip.Request, tx sip.ServerTransaction)
 			if callID, ok := response.CallID(); ok {
 				if v, found := ua.iss.Load(*callID); found {
 					ua.iss.Delete(*callID)
-					is := v.(*invite.Session)
-					is.SetState(invite.Canceled)
-					ua.handleInviteState(is, &request, &response, invite.Canceled, nil)
+					is := v.(*session.Session)
+					is.SetState(session.Canceled)
+					ua.handleInviteState(is, &request, &response, session.Canceled, nil)
 				}
 			}
 
@@ -424,11 +424,11 @@ func (ua *UserAgent) RequestWithContext(ctx context.Context, request sip.Request
 			var transaction sip.Transaction = tx.(sip.Transaction)
 			if _, found := ua.iss.Load(*callID); !found {
 				contact, _ := request.Contact()
-				is := invite.NewInviteSession(ua.RequestWithContext, "UAC", contact, request, *callID, transaction, invite.Outgoing)
+				is := session.NewInviteSession(ua.RequestWithContext, "UAC", contact, request, *callID, transaction, session.Outgoing)
 				ua.iss.Store(*callID, is)
 				is.ProvideOffer(request.Body())
-				is.SetState(invite.InviteSent)
-				ua.handleInviteState(is, &request, nil, invite.InviteSent, &transaction)
+				is.SetState(session.InviteSent)
+				ua.handleInviteState(is, &request, nil, session.InviteSent, &transaction)
 			}
 		}
 	}
@@ -552,13 +552,13 @@ func (ua *UserAgent) RequestWithContext(ctx context.Context, request sip.Request
 				callID, ok := provisional.CallID()
 				if ok {
 					if v, found := ua.iss.Load(*callID); found {
-						is := v.(*invite.Session)
+						is := v.(*session.Session)
 						is.StoreResponse(provisional)
 						// handle Ringing or Processing with sdp
-						ua.handleInviteState(is, &request, &provisional, invite.Provisional, nil)
+						ua.handleInviteState(is, &request, &provisional, session.Provisional, nil)
 						if len(provisional.Body()) > 0 {
-							is.SetState(invite.EarlyMedia)
-							ua.handleInviteState(is, &request, &provisional, invite.EarlyMedia, nil)
+							is.SetState(session.EarlyMedia)
+							ua.handleInviteState(is, &request, &provisional, session.EarlyMedia, nil)
 						}
 					}
 				}
@@ -574,11 +574,11 @@ func (ua *UserAgent) RequestWithContext(ctx context.Context, request sip.Request
 				callID, ok := request.CallID()
 				if ok {
 					if v, found := ua.iss.Load(*callID); found {
-						is := v.(*invite.Session)
+						is := v.(*session.Session)
 						ua.iss.Delete(*callID)
 						// handle Ringing or Processing with sdp
-						is.SetState(invite.Failure)
-						ua.handleInviteState(is, &request, &response, invite.Failure, nil)
+						is.SetState(session.Failure)
+						ua.handleInviteState(is, &request, &response, session.Failure, nil)
 					}
 				}
 				return nil, err
@@ -587,9 +587,9 @@ func (ua *UserAgent) RequestWithContext(ctx context.Context, request sip.Request
 				if ok {
 					if v, found := ua.iss.Load(*callID); found {
 						// handle Ringing or Processing with sdp
-						is := v.(*invite.Session)
-						is.SetState(invite.Confirmed)
-						ua.handleInviteState(is, &request, &response, invite.Confirmed, nil)
+						is := v.(*session.Session)
+						is.SetState(session.Confirmed)
+						ua.handleInviteState(is, &request, &response, session.Confirmed, nil)
 					}
 				}
 				return response, nil

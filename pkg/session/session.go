@@ -1,4 +1,4 @@
-package invite
+package session
 
 import (
 	"context"
@@ -14,7 +14,7 @@ var (
 )
 
 func init() {
-	logger = log.NewDefaultLogrusLogger().WithPrefix("invite.Session")
+	logger = log.NewDefaultLogrusLogger().WithPrefix("session.Session")
 }
 
 type Status string
