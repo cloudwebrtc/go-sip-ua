@@ -5,7 +5,7 @@ go 1.13
 replace github.com/ghettovoice/gosip v0.0.0-20200807105127-dadd6a686e38 => ../gosip
 
 require (
-	github.com/c-bata/go-prompt v0.2.3
+	github.com/c-bata/go-prompt v0.2.5
 	github.com/ghettovoice/gosip v0.0.0-20200807105127-dadd6a686e38
 	github.com/google/uuid v1.1.3
 	github.com/mattn/go-runewidth v0.0.9 // indirect
