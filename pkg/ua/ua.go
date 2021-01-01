@@ -271,11 +271,13 @@ func (ua *UserAgent) Invite(profile *account.Profile, target sip.SipUri, body *s
 	resp, err := ua.RequestWithContext(context.TODO(), *request, authorizer, false)
 	if err != nil {
 		logger.Errorf("INVITE: Request [INVITE] failed, err => %v", err)
+		return nil, err
 	}
 
 	if resp != nil {
 		stateCode := resp.StatusCode()
 		logger.Infof("INVITE: resp %d => %s", stateCode, resp.String())
+		return nil, fmt.Errorf("Invite session is unsuccessful, code: %d, reason: %s", stateCode, resp.String())
 	}
 
 	callID, ok := (*request).CallID()
@@ -285,31 +287,11 @@ func (ua *UserAgent) Invite(profile *account.Profile, target sip.SipUri, body *s
 		}
 	}
 
-	return nil, fmt.Errorf("Invite session not found!")
+	return nil, fmt.Errorf("Invite session not found, unknown errors.")
 }
 
 func (ua *UserAgent) Request(req *sip.Request) {
 	ua.config.SipStack.Request(*req)
-}
-
-func (ua *UserAgent) SendBye(profile *account.Profile, callID *sip.CallID, target sip.SipUri) {
-	logger := ua.log
-
-	from := buildFrom(target, profile.User, profile.DisplayName)
-	contact := ua.buildContact(target, &profile.InstanceID)
-
-	to := buildTo(target)
-	request, err := ua.BuildRequest(sip.BYE, from, to, contact, target, callID)
-	if err != nil {
-		logger.Errorf("Register: err = %v", err)
-		return
-	}
-
-	var authorizer *auth.ClientAuthorizer = nil
-	if profile.Auth != nil {
-		authorizer = auth.NewClientAuthorizer(profile.Auth.AuthName, profile.Auth.Password)
-	}
-	ua.RequestWithContext(context.TODO(), *request, authorizer, false)
 }
 
 func (ua *UserAgent) handleBye(request sip.Request, tx sip.ServerTransaction) {
