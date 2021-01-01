@@ -111,7 +111,11 @@ func (s *Session) Request() sip.Request {
 	return s.request
 }
 
-func (s *Session) isInProgress() bool {
+func (s *Session) Response() sip.Response {
+	return s.response
+}
+
+func (s *Session) IsInProgress() bool {
 	switch s.status {
 	case InviteSent:
 		fallthrough
@@ -128,7 +132,7 @@ func (s *Session) isInProgress() bool {
 	}
 }
 
-func (s *Session) isEstablished() bool {
+func (s *Session) IsEstablished() bool {
 	switch s.status {
 	case Answered:
 		fallthrough
@@ -141,7 +145,7 @@ func (s *Session) isEstablished() bool {
 	}
 }
 
-func (s *Session) isEnded() bool {
+func (s *Session) IsEnded() bool {
 	switch s.status {
 	case Failure:
 		fallthrough
