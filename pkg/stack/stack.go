@@ -1,4 +1,4 @@
-package endpoint
+package stack
 
 import (
 	"context"
@@ -39,8 +39,8 @@ type ServerAuthManager struct {
 	RequiresChallenge RequiresChallengeHandler
 }
 
-// EndPointConfig describes available options
-type EndPointConfig struct {
+// SipStackConfig describes available options
+type SipStackConfig struct {
 	// Public IP address or domain name, if empty auto resolved IP will be used.
 	Host string
 	// Dns is an address of the public DNS server to use in SRV lookup.
@@ -50,8 +50,8 @@ type EndPointConfig struct {
 	ServerAuthManager ServerAuthManager
 }
 
-// EndPoint is a SIP Client/Server
-type EndPoint struct {
+// SipStack a golang SIP Stack
+type SipStack struct {
 	listenPorts     map[string]*sip.Port
 	tp              transport.Layer
 	tx              transaction.Layer
@@ -68,13 +68,13 @@ type EndPoint struct {
 	log             log.Logger
 }
 
-// NewEndPoint creates new instance of SIP server.
-func NewEndPoint(config *EndPointConfig, logger log.Logger) *EndPoint {
+// NewSipStack creates new instance of SipStack.
+func NewSipStack(config *SipStackConfig, logger log.Logger) *SipStack {
 	if config == nil {
-		config = &EndPointConfig{}
+		config = &SipStackConfig{}
 	}
 
-	logger = logger.WithPrefix("EndPoint")
+	logger = logger.WithPrefix("SipStack")
 
 	var host string
 	var ip net.IP
@@ -112,7 +112,7 @@ func NewEndPoint(config *EndPointConfig, logger log.Logger) *EndPoint {
 		extensions = config.Extensions
 	}
 
-	e := &EndPoint{
+	gs := &SipStack{
 		listenPorts:     make(map[string]*sip.Port),
 		host:            host,
 		ip:              ip,
@@ -125,114 +125,114 @@ func NewEndPoint(config *EndPointConfig, logger log.Logger) *EndPoint {
 	}
 
 	if config.ServerAuthManager.Authenticator != nil {
-		e.authenticator = &config.ServerAuthManager
+		gs.authenticator = &config.ServerAuthManager
 	}
 
-	e.log = logger.WithFields(log.Fields{
-		"sip_server_ptr": fmt.Sprintf("%p", e),
+	gs.log = logger.WithFields(log.Fields{
+		"sip_server_ptr": fmt.Sprintf("%p", gs),
 	})
-	e.tp = transport.NewLayer(ip, dnsResolver, config.MsgMapper, e.Log())
-	e.tx = transaction.NewLayer(e.tp, utils.NewLogrusLogger(logrus.ErrorLevel) /*e.Log().WithFields(e.tp.Log().Fields())*/)
+	gs.tp = transport.NewLayer(ip, dnsResolver, config.MsgMapper, gs.Log())
+	gs.tx = transaction.NewLayer(gs.tp, utils.NewLogrusLogger(logrus.ErrorLevel) /*gs.Log().WithFields(gs.tp.Log().Fields())*/)
 
-	go e.serve()
+	go gs.serve()
 
-	return e
+	return gs
 }
 
 // Log .
-func (e *EndPoint) Log() log.Logger {
-	return e.log
+func (gs *SipStack) Log() log.Logger {
+	return gs.log
 }
 
 // Listen ListenAndServe starts serving listeners on the provided address
-func (e *EndPoint) Listen(protocol string, listenAddr string, options *transport.TLSConfig) error {
+func (gs *SipStack) Listen(protocol string, listenAddr string, options *transport.TLSConfig) error {
 	network := strings.ToUpper(protocol)
-	err := e.tp.Listen(network, listenAddr, options)
+	err := gs.tp.Listen(network, listenAddr, options)
 	if err == nil {
 		target, err := transport.NewTargetFromAddr(listenAddr)
 		if err != nil {
 			return err
 		}
 		target = transport.FillTargetHostAndPort(network, target)
-		if _, ok := e.listenPorts[network]; !ok {
-			e.listenPorts[network] = target.Port
+		if _, ok := gs.listenPorts[network]; !ok {
+			gs.listenPorts[network] = target.Port
 		}
 	}
 	return err
 }
 
-func (e *EndPoint) serve() {
-	defer e.Shutdown()
+func (gs *SipStack) serve() {
+	defer gs.Shutdown()
 
 	for {
 		select {
-		case tx, ok := <-e.tx.Requests():
+		case tx, ok := <-gs.tx.Requests():
 			if !ok {
 				return
 			}
-			e.hwg.Add(1)
-			go e.handleRequest(tx.Origin(), tx)
-		case ack, ok := <-e.tx.Acks():
+			gs.hwg.Add(1)
+			go gs.handleRequest(tx.Origin(), tx)
+		case ack, ok := <-gs.tx.Acks():
 			if !ok {
 				return
 			}
-			e.hwg.Add(1)
-			go e.handleRequest(ack, nil)
-		case response, ok := <-e.tx.Responses():
+			gs.hwg.Add(1)
+			go gs.handleRequest(ack, nil)
+		case response, ok := <-gs.tx.Responses():
 			if !ok {
 				return
 			}
-			logger := e.Log().WithFields(map[string]interface{}{
+			logger := gs.Log().WithFields(map[string]interface{}{
 				"sip_response": response.Short(),
 			})
 			logger.Warn("received not matched response")
 			if key, err := transaction.MakeClientTxKey(response); err == nil {
-				e.invitesLock.RLock()
-				inviteRequest, ok := e.invites[key]
-				e.invitesLock.RUnlock()
+				gs.invitesLock.RLock()
+				inviteRequest, ok := gs.invites[key]
+				gs.invitesLock.RUnlock()
 				if ok {
-					go e.AckInviteRequest(inviteRequest, response)
+					go gs.AckInviteRequest(inviteRequest, response)
 				}
 			}
-		case err, ok := <-e.tx.Errors():
+		case err, ok := <-gs.tx.Errors():
 			if !ok {
 				return
 			}
-			e.Log().Errorf("received SIP transaction error: %s", err)
-		case err, ok := <-e.tp.Errors():
+			gs.Log().Errorf("received SIP transaction error: %s", err)
+		case err, ok := <-gs.tp.Errors():
 			if !ok {
 				return
 			}
 
-			e.Log().Errorf("received SIP transport error: %s", err)
+			gs.Log().Errorf("received SIP transport error: %s", err)
 		}
 	}
 }
 
-func (e *EndPoint) handleRequest(req sip.Request, tx sip.ServerTransaction) {
-	defer e.hwg.Done()
+func (gs *SipStack) handleRequest(req sip.Request, tx sip.ServerTransaction) {
+	defer gs.hwg.Done()
 
-	logger := e.Log().WithFields(req.Fields())
+	logger := gs.Log().WithFields(req.Fields())
 	logger.Info("routing incoming SIP request...")
 
-	e.hmu.RLock()
-	handler, ok := e.requestHandlers[req.Method()]
-	e.hmu.RUnlock()
+	gs.hmu.RLock()
+	handler, ok := gs.requestHandlers[req.Method()]
+	gs.hmu.RUnlock()
 
 	if !ok {
 		logger.Warnf("SIP request handler not found")
 
 		res := sip.NewResponseFromRequest("", req, 405, "Method Not Allowed", "")
-		if _, err := e.Respond(res); err != nil {
+		if _, err := gs.Respond(res); err != nil {
 			logger.Errorf("respond '405 Method Not Allowed' failed: %s", err)
 		}
 
 		return
 	}
 
-	if e.authenticator != nil {
-		authenticator := e.authenticator.Authenticator
-		requiresChallenge := e.authenticator.RequiresChallenge
+	if gs.authenticator != nil {
+		authenticator := gs.authenticator.Authenticator
+		requiresChallenge := gs.authenticator.RequiresChallenge
 		if requiresChallenge(req) == true {
 			go func() {
 				if _, ok := authenticator.Authenticate(req, tx); ok {
@@ -247,16 +247,16 @@ func (e *EndPoint) handleRequest(req sip.Request, tx sip.ServerTransaction) {
 }
 
 //Request Send SIP message
-func (e *EndPoint) Request(req sip.Request) (sip.ClientTransaction, error) {
-	if e.shuttingDown() {
+func (gs *SipStack) Request(req sip.Request) (sip.ClientTransaction, error) {
+	if gs.shuttingDown() {
 		return nil, fmt.Errorf("can not send through stopped server")
 	}
 
-	return e.tx.Request(e.prepareRequest(req))
+	return gs.tx.Request(gs.prepareRequest(req))
 }
 
-func (e EndPoint) GetNetworkInfo(protocol string) *transport.Target {
-	logger := e.Log()
+func (gs SipStack) GetNetworkInfo(protocol string) *transport.Target {
+	logger := gs.Log()
 
 	var target transport.Target
 	if v, err := util.ResolveSelfIP(); err == nil {
@@ -266,7 +266,7 @@ func (e EndPoint) GetNetworkInfo(protocol string) *transport.Target {
 	}
 
 	network := strings.ToUpper(protocol)
-	if p, ok := e.listenPorts[network]; ok {
+	if p, ok := gs.listenPorts[network]; ok {
 		target.Port = p
 	} else {
 		defPort := transport.DefaultPort(network)
@@ -275,32 +275,32 @@ func (e EndPoint) GetNetworkInfo(protocol string) *transport.Target {
 	return &target
 }
 
-func (e *EndPoint) RememberInviteRequest(request sip.Request) {
+func (gs *SipStack) RememberInviteRequest(request sip.Request) {
 	if key, err := transaction.MakeClientTxKey(request); err == nil {
-		e.invitesLock.Lock()
-		e.invites[key] = request
-		e.invitesLock.Unlock()
+		gs.invitesLock.Lock()
+		gs.invites[key] = request
+		gs.invitesLock.Unlock()
 
 		time.AfterFunc(time.Minute, func() {
-			e.invitesLock.Lock()
-			delete(e.invites, key)
-			e.invitesLock.Unlock()
+			gs.invitesLock.Lock()
+			delete(gs.invites, key)
+			gs.invitesLock.Unlock()
 		})
 	} else {
-		e.Log().WithFields(map[string]interface{}{
+		gs.Log().WithFields(map[string]interface{}{
 			"sip_request": request.Short(),
 		}).Errorf("remember of the request failed: %s", err)
 	}
 }
 
-func (e *EndPoint) AckInviteRequest(request sip.Request, response sip.Response) {
+func (gs *SipStack) AckInviteRequest(request sip.Request, response sip.Response) {
 	ackRequest := sip.NewAckRequest("", request, response, log.Fields{
 		"sent_at": time.Now(),
 	})
 	ackRequest.SetSource(request.Source())
 	ackRequest.SetDestination(request.Destination())
-	if err := e.Send(ackRequest); err != nil {
-		e.Log().WithFields(map[string]interface{}{
+	if err := gs.Send(ackRequest); err != nil {
+		gs.Log().WithFields(map[string]interface{}{
 			"invite_request":  request.Short(),
 			"invite_response": response.Short(),
 			"ack_request":     ackRequest.Short(),
@@ -308,12 +308,12 @@ func (e *EndPoint) AckInviteRequest(request sip.Request, response sip.Response) 
 	}
 }
 
-func (e *EndPoint) CancelRequest(request sip.Request, response sip.Response) {
+func (gs *SipStack) CancelRequest(request sip.Request, response sip.Response) {
 	cancelRequest := sip.NewCancelRequest("", request, log.Fields{
 		"sent_at": time.Now(),
 	})
-	if err := e.Send(cancelRequest); err != nil {
-		e.Log().WithFields(map[string]interface{}{
+	if err := gs.Send(cancelRequest); err != nil {
+		gs.Log().WithFields(map[string]interface{}{
 			"invite_request":  request.Short(),
 			"invite_response": response.Short(),
 			"cancel_request":  cancelRequest.Short(),
@@ -321,7 +321,7 @@ func (e *EndPoint) CancelRequest(request sip.Request, response sip.Response) {
 	}
 }
 
-func (e *EndPoint) prepareRequest(req sip.Request) sip.Request {
+func (gs *SipStack) prepareRequest(req sip.Request) sip.Request {
 	if viaHop, ok := req.ViaHop(); ok {
 		if viaHop.Params == nil {
 			viaHop.Params = sip.NewParams()
@@ -342,22 +342,22 @@ func (e *EndPoint) prepareRequest(req sip.Request) sip.Request {
 		}, "Route")
 	}
 
-	e.appendAutoHeaders(req)
+	gs.appendAutoHeaders(req)
 
 	return req
 }
 
 // Respond .
-func (e *EndPoint) Respond(res sip.Response) (sip.ServerTransaction, error) {
-	if e.shuttingDown() {
+func (gs *SipStack) Respond(res sip.Response) (sip.ServerTransaction, error) {
+	if gs.shuttingDown() {
 		return nil, fmt.Errorf("can not send through stopped server")
 	}
 
-	return e.tx.Respond(e.prepareResponse(res))
+	return gs.tx.Respond(gs.prepareResponse(res))
 }
 
 // RespondOnRequest .
-func (e *EndPoint) RespondOnRequest(
+func (gs *SipStack) RespondOnRequest(
 	request sip.Request,
 	status sip.StatusCode,
 	reason, body string,
@@ -368,7 +368,7 @@ func (e *EndPoint) RespondOnRequest(
 		response.AppendHeader(header)
 	}
 
-	tx, err := e.Respond(response)
+	tx, err := gs.Respond(response)
 	if err != nil {
 		return nil, fmt.Errorf("respond '%d %s' failed: %w", response.StatusCode(), response.Reason(), err)
 	}
@@ -377,59 +377,59 @@ func (e *EndPoint) RespondOnRequest(
 }
 
 // Send .
-func (e *EndPoint) Send(msg sip.Message) error {
-	if e.shuttingDown() {
+func (gs *SipStack) Send(msg sip.Message) error {
+	if gs.shuttingDown() {
 		return fmt.Errorf("can not send through stopped server")
 	}
 
 	switch m := msg.(type) {
 	case sip.Request:
-		msg = e.prepareRequest(m)
+		msg = gs.prepareRequest(m)
 	case sip.Response:
-		msg = e.prepareResponse(m)
+		msg = gs.prepareResponse(m)
 	}
 
-	return e.tp.Send(msg)
+	return gs.tp.Send(msg)
 }
 
-func (e *EndPoint) prepareResponse(res sip.Response) sip.Response {
-	e.appendAutoHeaders(res)
+func (gs *SipStack) prepareResponse(res sip.Response) sip.Response {
+	gs.appendAutoHeaders(res)
 
 	return res
 }
 
-func (e *EndPoint) shuttingDown() bool {
-	return atomic.LoadInt32(&e.inShutdown) != 0
+func (gs *SipStack) shuttingDown() bool {
+	return atomic.LoadInt32(&gs.inShutdown) != 0
 }
 
 // Shutdown gracefully shutdowns SIP server
-func (e *EndPoint) Shutdown() {
-	if e.shuttingDown() {
+func (gs *SipStack) Shutdown() {
+	if gs.shuttingDown() {
 		return
 	}
 
-	atomic.AddInt32(&e.inShutdown, 1)
-	defer atomic.AddInt32(&e.inShutdown, -1)
+	atomic.AddInt32(&gs.inShutdown, 1)
+	defer atomic.AddInt32(&gs.inShutdown, -1)
 	// stop transaction layer
-	e.tx.Cancel()
-	<-e.tx.Done()
+	gs.tx.Cancel()
+	<-gs.tx.Done()
 	// stop transport layer
-	e.tp.Cancel()
-	<-e.tp.Done()
+	gs.tp.Cancel()
+	<-gs.tp.Done()
 	// wait for handlers
-	e.hwg.Wait()
+	gs.hwg.Wait()
 }
 
 // OnRequest registers new request callback
-func (e *EndPoint) OnRequest(method sip.RequestMethod, handler RequestHandler) error {
-	e.hmu.Lock()
-	e.requestHandlers[method] = handler
-	e.hmu.Unlock()
+func (gs *SipStack) OnRequest(method sip.RequestMethod, handler RequestHandler) error {
+	gs.hmu.Lock()
+	gs.requestHandlers[method] = handler
+	gs.hmu.Unlock()
 
 	return nil
 }
 
-func (e *EndPoint) appendAutoHeaders(msg sip.Message) {
+func (gs *SipStack) appendAutoHeaders(msg sip.Message) {
 	autoAppendMethods := map[sip.RequestMethod]bool{
 		sip.INVITE:   true,
 		sip.REGISTER: true,
@@ -452,7 +452,7 @@ func (e *EndPoint) appendAutoHeaders(msg sip.Message) {
 			hdrs := msg.GetHeaders("Allow")
 			if len(hdrs) == 0 {
 				allow := make(sip.AllowHeader, 0)
-				for _, method := range e.getAllowedMethods() {
+				for _, method := range gs.getAllowedMethods() {
 					allow = append(allow, method)
 				}
 
@@ -462,7 +462,7 @@ func (e *EndPoint) appendAutoHeaders(msg sip.Message) {
 			hdrs = msg.GetHeaders("Supported")
 			if len(hdrs) == 0 {
 				msg.AppendHeader(&sip.SupportedHeader{
-					Options: e.extensions,
+					Options: gs.extensions,
 				})
 			}
 		}
@@ -474,7 +474,7 @@ func (e *EndPoint) appendAutoHeaders(msg sip.Message) {
 	}
 }
 
-func (e *EndPoint) getAllowedMethods() []sip.RequestMethod {
+func (gs *SipStack) getAllowedMethods() []sip.RequestMethod {
 	methods := []sip.RequestMethod{
 		sip.INVITE,
 		sip.ACK,
@@ -492,13 +492,13 @@ func (e *EndPoint) getAllowedMethods() []sip.RequestMethod {
 		sip.OPTIONS: true,
 	}
 
-	e.hmu.RLock()
-	for method := range e.requestHandlers {
+	gs.hmu.RLock()
+	for method := range gs.requestHandlers {
 		if _, ok := added[method]; !ok {
 			methods = append(methods, method)
 		}
 	}
-	e.hmu.RUnlock()
+	gs.hmu.RUnlock()
 
 	return methods
 }

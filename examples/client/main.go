@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/cloudwebrtc/go-sip-ua/pkg/account"
-	"github.com/cloudwebrtc/go-sip-ua/pkg/endpoint"
 	"github.com/cloudwebrtc/go-sip-ua/pkg/session"
+	"github.com/cloudwebrtc/go-sip-ua/pkg/stack"
 	"github.com/cloudwebrtc/go-sip-ua/pkg/ua"
 	"github.com/ghettovoice/gosip/log"
 	"github.com/ghettovoice/gosip/sip"
@@ -26,22 +26,22 @@ func init() {
 func main() {
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGTERM, syscall.SIGINT)
-	endpoint := endpoint.NewEndPoint(&endpoint.EndPointConfig{Extensions: []string{"replaces", "outbound"}, Dns: "8.8.8.8"}, logger)
+	stack := stack.NewSipStack(&stack.SipStackConfig{Extensions: []string{"replaces", "outbound"}, Dns: "8.8.8.8"}, logger)
 
 	listen := "0.0.0.0:5080"
 	logger.Infof("Listen => %s", listen)
 
-	if err := endpoint.Listen("udp", listen, nil); err != nil {
+	if err := stack.Listen("udp", listen, nil); err != nil {
 		logger.Panic(err)
 	}
 
-	if err := endpoint.Listen("tcp", listen, nil); err != nil {
+	if err := stack.Listen("tcp", listen, nil); err != nil {
 		logger.Panic(err)
 	}
 
 	ua := ua.NewUserAgent(&ua.UserAgentConfig{
 		UserAgent: "Go Sip Client/1.0.0",
-		Endpoint:  endpoint,
+		SipStack:  stack,
 	}, logger)
 
 	ua.InviteStateHandler = func(sess *session.Session, req *sip.Request, resp *sip.Response, state session.Status) {

@@ -5,9 +5,9 @@ import (
 
 	"github.com/cloudwebrtc/go-sip-ua/pkg/account"
 	"github.com/cloudwebrtc/go-sip-ua/pkg/auth"
-	"github.com/cloudwebrtc/go-sip-ua/pkg/endpoint"
 	"github.com/cloudwebrtc/go-sip-ua/pkg/registry"
 	"github.com/cloudwebrtc/go-sip-ua/pkg/session"
+	"github.com/cloudwebrtc/go-sip-ua/pkg/stack"
 	"github.com/cloudwebrtc/go-sip-ua/pkg/ua"
 	"github.com/cloudwebrtc/go-sip-ua/pkg/util"
 	"github.com/ghettovoice/gosip/log"
@@ -45,36 +45,36 @@ func NewB2BUA() *B2BUA {
 		accounts: make(map[string]string),
 	}
 
-	endpoint := endpoint.NewEndPoint(&endpoint.EndPointConfig{
+	stack := stack.NewSipStack(&stack.SipStackConfig{
 		Extensions: []string{"replaces", "outbound"},
 		Dns:        "8.8.8.8",
-		ServerAuthManager: endpoint.ServerAuthManager{
+		ServerAuthManager: stack.ServerAuthManager{
 			Authenticator:     auth.NewServerAuthorizer(b.requestCredential, "b2bua", false, logger),
 			RequiresChallenge: b.requiresChallenge,
 		},
 	}, logger)
 
-	if err := endpoint.Listen("udp", "0.0.0.0:5060", nil); err != nil {
+	if err := stack.Listen("udp", "0.0.0.0:5060", nil); err != nil {
 		logger.Panic(err)
 	}
 
-	if err := endpoint.Listen("tcp", "0.0.0.0:5060", nil); err != nil {
+	if err := stack.Listen("tcp", "0.0.0.0:5060", nil); err != nil {
 		logger.Panic(err)
 	}
 
 	tlsOptions := &transport.TLSConfig{Cert: "certs/cert.pem", Key: "certs/key.pem"}
 
-	if err := endpoint.Listen("tls", "0.0.0.0:5061", tlsOptions); err != nil {
+	if err := stack.Listen("tls", "0.0.0.0:5061", tlsOptions); err != nil {
 		logger.Panic(err)
 	}
 
-	if err := endpoint.Listen("wss", "0.0.0.0:5081", tlsOptions); err != nil {
+	if err := stack.Listen("wss", "0.0.0.0:5081", tlsOptions); err != nil {
 		logger.Panic(err)
 	}
 
 	ua := ua.NewUserAgent(&ua.UserAgentConfig{
 		UserAgent: "Go B2BUA/1.0.0",
-		Endpoint:  endpoint,
+		SipStack:  stack,
 	}, logger)
 
 	ua.InviteStateHandler = func(sess *session.Session, req *sip.Request, resp *sip.Response, state session.Status) {
@@ -178,7 +178,7 @@ func NewB2BUA() *B2BUA {
 		logger.Infof("RegisterStateHandler: state => %v", state)
 	}
 
-	endpoint.OnRequest(sip.REGISTER, b.handleRegister)
+	stack.OnRequest(sip.REGISTER, b.handleRegister)
 	b.ua = ua
 	return b
 }

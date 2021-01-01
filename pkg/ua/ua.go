@@ -8,8 +8,8 @@ import (
 
 	"github.com/cloudwebrtc/go-sip-ua/pkg/account"
 	"github.com/cloudwebrtc/go-sip-ua/pkg/auth"
-	"github.com/cloudwebrtc/go-sip-ua/pkg/endpoint"
 	"github.com/cloudwebrtc/go-sip-ua/pkg/session"
+	"github.com/cloudwebrtc/go-sip-ua/pkg/stack"
 
 	"github.com/ghettovoice/gosip/log"
 	"github.com/ghettovoice/gosip/sip"
@@ -19,7 +19,7 @@ import (
 
 type UserAgentConfig struct {
 	UserAgent string
-	Endpoint  *endpoint.EndPoint
+	SipStack  *stack.SipStack
 	log       log.Logger
 }
 
@@ -41,11 +41,11 @@ func NewUserAgent(config *UserAgentConfig, logger log.Logger) *UserAgent {
 		RegisterStateHandler: nil,
 		log:                  logger.WithPrefix("UserAgent"),
 	}
-	endpoint := config.Endpoint
-	endpoint.OnRequest(sip.INVITE, ua.handleInvite)
-	endpoint.OnRequest(sip.ACK, ua.handleACK)
-	endpoint.OnRequest(sip.BYE, ua.handleBye)
-	endpoint.OnRequest(sip.CANCEL, ua.handleCancel)
+	stack := config.SipStack
+	stack.OnRequest(sip.INVITE, ua.handleInvite)
+	stack.OnRequest(sip.ACK, ua.handleACK)
+	stack.OnRequest(sip.BYE, ua.handleBye)
+	stack.OnRequest(sip.CANCEL, ua.handleCancel)
 	return ua
 }
 
@@ -124,8 +124,8 @@ func (ua *UserAgent) buildViaHopHeader(target sip.SipUri) *sip.ViaHop {
 	if nt, ok := target.UriParams().Get("transport"); ok {
 		protocol = nt.String()
 	}
-	e := ua.config.Endpoint
-	netinfo := e.GetNetworkInfo(protocol)
+	s := ua.config.SipStack
+	netinfo := s.GetNetworkInfo(protocol)
 
 	var host string = netinfo.Host
 	if net.ParseIP(target.Host()).IsLoopback() {
@@ -149,7 +149,7 @@ func (ua *UserAgent) buildViaHopHeader(target sip.SipUri) *sip.ViaHop {
 }
 
 func (ua *UserAgent) buildContact(uri sip.SipUri, instanceID *string) *sip.Address {
-	e := ua.config.Endpoint
+	s := ua.config.SipStack
 	contact := &sip.Address{
 		Uri: &sip.SipUri{
 			FHost:      "0.0.0.0",
@@ -166,7 +166,7 @@ func (ua *UserAgent) buildContact(uri sip.SipUri, instanceID *string) *sip.Addre
 		protocol = nt.String()
 	}
 
-	target := e.GetNetworkInfo(protocol)
+	target := s.GetNetworkInfo(protocol)
 
 	var host string = target.Host
 	if net.ParseIP(uri.Host()).IsLoopback() {
@@ -289,7 +289,7 @@ func (ua *UserAgent) Invite(profile *account.Profile, target sip.SipUri, body *s
 }
 
 func (ua *UserAgent) Request(req *sip.Request) {
-	ua.config.Endpoint.Request(*req)
+	ua.config.SipStack.Request(*req)
 }
 
 func (ua *UserAgent) SendBye(profile *account.Profile, callID *sip.CallID, target sip.SipUri) {
@@ -412,8 +412,8 @@ func (ua *UserAgent) handleInvite(request sip.Request, tx sip.ServerTransaction)
 
 // RequestWithContext .
 func (ua *UserAgent) RequestWithContext(ctx context.Context, request sip.Request, authorizer sip.Authorizer, waitForResult bool) (sip.Response, error) {
-	e := ua.config.Endpoint
-	tx, err := e.Request(request)
+	s := ua.config.SipStack
+	tx, err := s.Request(request)
 	if err != nil {
 		return nil, err
 	}
@@ -446,7 +446,7 @@ func (ua *UserAgent) RequestWithContext(ctx context.Context, request sip.Request
 			select {
 			case <-ctx.Done():
 				if lastResponse != nil && lastResponse.IsProvisional() {
-					e.CancelRequest(request, lastResponse)
+					s.CancelRequest(request, lastResponse)
 				}
 				if lastResponse != nil {
 					lastResponse.SetPrevious(previousResponses)
@@ -508,11 +508,11 @@ func (ua *UserAgent) RequestWithContext(ctx context.Context, request sip.Request
 					response.SetPrevious(previousResponses)
 
 					if request.IsInvite() {
-						e.AckInviteRequest(request, response)
-						e.RememberInviteRequest(request)
+						s.AckInviteRequest(request, response)
+						s.RememberInviteRequest(request)
 						go func() {
 							for response := range tx.Responses() {
-								e.AckInviteRequest(request, response)
+								s.AckInviteRequest(request, response)
 							}
 						}()
 					}
@@ -607,5 +607,5 @@ func (ua *UserAgent) RequestWithContext(ctx context.Context, request sip.Request
 }
 
 func (ua *UserAgent) Shutdown() {
-	ua.config.Endpoint.Shutdown()
+	ua.config.SipStack.Shutdown()
 }
