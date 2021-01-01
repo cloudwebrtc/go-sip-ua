@@ -55,7 +55,8 @@ func main() {
 	ua.InviteStateHandler = func(sess *session.Session, req *sip.Request, resp *sip.Response, state session.Status) {
 		logger.Infof("InviteStateHandler: state => %v, type => %s", state, sess.Direction())
 		if state == session.InviteReceived {
-			sess.ProvideAnswer("")
+			sdp := mock.Answer.String()
+			sess.ProvideAnswer(sdp)
 			sess.Accept(200)
 		}
 	}
@@ -81,7 +82,7 @@ func main() {
 	go ua.SendRegister(profile, target, profile.Expires)
 	time.Sleep(time.Second * 3)
 
-	sdp := mock.Answer.String()
+	sdp := mock.Offer.String()
 	called := "300"
 	target.FUser = sip.String{Str: called}
 	go ua.Invite(profile, target, &sdp)
