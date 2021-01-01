@@ -7,12 +7,14 @@ import (
 	"time"
 
 	"github.com/cloudwebrtc/go-sip-ua/pkg/account"
+	"github.com/cloudwebrtc/go-sip-ua/pkg/mock"
 	"github.com/cloudwebrtc/go-sip-ua/pkg/session"
 	"github.com/cloudwebrtc/go-sip-ua/pkg/stack"
 	"github.com/cloudwebrtc/go-sip-ua/pkg/ua"
 	"github.com/ghettovoice/gosip/log"
 	"github.com/ghettovoice/gosip/sip"
 	"github.com/ghettovoice/gosip/sip/parser"
+	"github.com/ghettovoice/gosip/transport"
 )
 
 var (
@@ -36,6 +38,12 @@ func main() {
 	}
 
 	if err := stack.Listen("tcp", listen, nil); err != nil {
+		logger.Panic(err)
+	}
+
+	tlsOptions := &transport.TLSConfig{Cert: "certs/cert.pem", Key: "certs/key.pem"}
+
+	if err := stack.Listen("wss", "0.0.0.0:5091", tlsOptions); err != nil {
 		logger.Panic(err)
 	}
 
@@ -65,24 +73,22 @@ func main() {
 		1800,
 	)
 
-	target, err := parser.ParseSipUri("sip:100@127.0.0.1:5060;transport=udp")
+	target, err := parser.ParseSipUri("sip:100@127.0.0.1:5081;transport=wss")
 	if err != nil {
 		logger.Error(err)
 	}
 
 	go ua.SendRegister(profile, target, profile.Expires)
-	time.Sleep(time.Second * 10)
+	time.Sleep(time.Second * 3)
+
+	sdp := mock.Answer.String()
+	called := "300"
+	target.FUser = sip.String{Str: called}
+	go ua.Invite(profile, target, &sdp)
+
+	time.Sleep(time.Second * 3)
 	go ua.SendRegister(profile, target, 0)
-	/*
-		sdp := mock.Answer.String()
-		called := "weiweiduan"
-		go ua.Invite(profile, sip.SipUri{
-			FUser:      sip.String{Str: called},
-			FHost:      target.Host(),
-			FPort:      target.Port(),
-			FUriParams: target.UriParams(),
-		}, &sdp)
-	*/
+
 	<-stop
 
 	ua.Shutdown()
