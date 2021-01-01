@@ -38,7 +38,7 @@ func consoleLoop(b2bua *b2bua.B2BUA) {
 	for {
 		t := prompt.Input("CLI> ", completer,
 			prompt.OptionTitle("GO B2BUA 1.0.0"),
-			prompt.OptionHistory([]string{"users", "onlines", "exit"}),
+			prompt.OptionHistory([]string{"calls", "users", "onlines"}),
 			prompt.OptionPrefixTextColor(prompt.Yellow),
 			prompt.OptionPreviewSuggestionTextColor(prompt.Blue),
 			prompt.OptionSelectedSuggestionBGColor(prompt.LightGray),
@@ -48,22 +48,39 @@ func consoleLoop(b2bua *b2bua.B2BUA) {
 		case "users":
 			accounts := b2bua.GetAccounts()
 			if len(accounts) > 0 {
+				fmt.Printf("Users:\n")
 				fmt.Printf("Username \t Password\n")
 				for user, pass := range accounts {
 					fmt.Printf("%v \t\t %v\n", user, pass)
 				}
+			} else {
+				fmt.Printf("No users\n")
+			}
+		case "calls":
+			calls := b2bua.Calls()
+			if len(calls) > 0 {
+				fmt.Printf("Calls:\n")
+				for _, call := range calls {
+					fmt.Printf("%v:\n", call.ToString())
+				}
+			} else {
+				fmt.Printf("No active calls\n")
 			}
 		case "onlines":
 			aors := b2bua.GetRegistry().GetAllContacts()
-			for aor, instances := range aors {
-				fmt.Printf("AOR: %v:\n", aor)
-				for _, instance := range instances {
-					fmt.Printf("\t%v, Expires: %d, Source: %v, Transport: %v\n",
-						(*instance).UserAgent,
-						(*instance).RegExpires,
-						(*instance).Source,
-						(*instance).Transport)
+			if len(aors) > 0 {
+				for aor, instances := range aors {
+					fmt.Printf("AOR: %v:\n", aor)
+					for _, instance := range instances {
+						fmt.Printf("\t%v, Expires: %d, Source: %v, Transport: %v\n",
+							(*instance).UserAgent,
+							(*instance).RegExpires,
+							(*instance).Source,
+							(*instance).Transport)
+					}
 				}
+			} else {
+				fmt.Printf("No online devices\n")
 			}
 		case "exit":
 			fmt.Println("Exit now.")

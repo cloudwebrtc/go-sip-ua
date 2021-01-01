@@ -21,6 +21,10 @@ type B2BCall struct {
 	dest *session.Session
 }
 
+func (b *B2BCall) ToString() string {
+	return b.src.Contact() + " => " + b.dest.Contact()
+}
+
 // B2BUA .
 type B2BUA struct {
 	ua       *ua.UserAgent

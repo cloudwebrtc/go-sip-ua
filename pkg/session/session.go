@@ -57,6 +57,7 @@ type Session struct {
 	transaction    sip.Transaction
 	direction      Direction
 	uaType         string // UAS | UAC
+	contact        *sip.ContactHeader
 	localURI       sip.Address
 	remoteURI      sip.Address
 	remoteTarget   sip.Uri
@@ -72,6 +73,7 @@ func NewInviteSession(reqcb RequestCallback, uaType string, contact *sip.Contact
 		direction:      dir,
 		offer:          "",
 		answer:         "",
+		contact:        contact,
 	}
 
 	to, _ := req.To()
@@ -99,6 +101,10 @@ func NewInviteSession(reqcb RequestCallback, uaType string, contact *sip.Contact
 
 func (s *Session) String() string {
 	return "Local: " + s.localURI.String() + ", Remote: " + s.remoteURI.String()
+}
+
+func (s *Session) Contact() string {
+	return s.contact.String()
 }
 
 func (s *Session) CallID() *sip.CallID {
