@@ -54,21 +54,21 @@ func NewB2BUA() *B2BUA {
 		},
 	}, logger)
 
-	if err := stack.Listen("udp", "0.0.0.0:5060", nil); err != nil {
+	if err := stack.Listen("udp", "0.0.0.0:5060"); err != nil {
 		logger.Panic(err)
 	}
 
-	if err := stack.Listen("tcp", "0.0.0.0:5060", nil); err != nil {
+	if err := stack.Listen("tcp", "0.0.0.0:5060"); err != nil {
 		logger.Panic(err)
 	}
 
 	tlsOptions := &transport.TLSConfig{Cert: "certs/cert.pem", Key: "certs/key.pem"}
 
-	if err := stack.Listen("tls", "0.0.0.0:5061", tlsOptions); err != nil {
+	if err := stack.ListenTLS("tls", "0.0.0.0:5061", tlsOptions); err != nil {
 		logger.Panic(err)
 	}
 
-	if err := stack.Listen("wss", "0.0.0.0:5081", tlsOptions); err != nil {
+	if err := stack.ListenTLS("wss", "0.0.0.0:5081", tlsOptions); err != nil {
 		logger.Panic(err)
 	}
 

@@ -33,17 +33,17 @@ func main() {
 	listen := "0.0.0.0:5080"
 	logger.Infof("Listen => %s", listen)
 
-	if err := stack.Listen("udp", listen, nil); err != nil {
+	if err := stack.Listen("udp", listen); err != nil {
 		logger.Panic(err)
 	}
 
-	if err := stack.Listen("tcp", listen, nil); err != nil {
+	if err := stack.Listen("tcp", listen); err != nil {
 		logger.Panic(err)
 	}
 
 	tlsOptions := &transport.TLSConfig{Cert: "certs/cert.pem", Key: "certs/key.pem"}
 
-	if err := stack.Listen("wss", "0.0.0.0:5091", tlsOptions); err != nil {
+	if err := stack.ListenTLS("wss", "0.0.0.0:5091", tlsOptions); err != nil {
 		logger.Panic(err)
 	}
 
@@ -83,7 +83,7 @@ func main() {
 	time.Sleep(time.Second * 3)
 
 	sdp := mock.Offer.String()
-	called := "300"
+	called := "400"
 	target.FUser = sip.String{Str: called}
 	go ua.Invite(profile, target, &sdp)
 

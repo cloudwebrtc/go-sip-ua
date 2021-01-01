@@ -58,8 +58,8 @@ type Session struct {
 	transaction    sip.Transaction
 	direction      Direction
 	uaType         string // UAS | UAC
-	remoteURI      sip.Address
 	localURI       sip.Address
+	remoteURI      sip.Address
 	remoteTarget   sip.Uri
 	userData       *interface{}
 }
@@ -88,6 +88,7 @@ func NewInviteSession(reqcb RequestCallback, uaType string, contact *sip.Contact
 	if uaType == "UAS" {
 		s.localURI = sip.Address{Uri: to.Address, Params: to.Params}
 		s.remoteURI = sip.Address{Uri: from.Address, Params: from.Params}
+
 		s.remoteTarget = contact.Address
 	} else if uaType == "UAC" {
 		s.localURI = sip.Address{Uri: from.Address, Params: from.Params}
@@ -343,20 +344,21 @@ func (s *Session) makeByeRequest(uaType string, msgID sip.MessageID, inviteReque
 			}),
 	)
 
+	from := s.localURI.Clone().AsFromHeader()
+	byeRequest.AppendHeader(from)
+	to := s.remoteURI.Clone().AsToHeader()
+	byeRequest.AppendHeader(to)
+
 	if uaType == "UAC" {
 		sip.CopyHeaders("Via", inviteRequest, byeRequest)
 		if len(inviteRequest.GetHeaders("Route")) > 0 {
 			sip.CopyHeaders("Route", inviteRequest, byeRequest)
 		}
-		sip.CopyHeaders("From", inviteRequest, byeRequest)
-		sip.CopyHeaders("To", inviteResponse, byeRequest)
 	} else if uaType == "UAS" {
 		sip.CopyHeaders("Via", inviteRequest, byeRequest)
 		if len(inviteResponse.GetHeaders("Route")) > 0 {
 			sip.CopyHeaders("Route", inviteResponse, byeRequest)
 		}
-		sip.CopyHeaders("From", inviteResponse, byeRequest)
-		sip.CopyHeaders("To", inviteRequest, byeRequest)
 		byeRequest.SetDestination(inviteResponse.Destination())
 		byeRequest.SetSource(inviteResponse.Source())
 	}
@@ -366,6 +368,7 @@ func (s *Session) makeByeRequest(uaType string, msgID sip.MessageID, inviteReque
 	sip.CopyHeaders("Call-ID", inviteRequest, byeRequest)
 	sip.CopyHeaders("CSeq", inviteRequest, byeRequest)
 	cseq, _ := byeRequest.CSeq()
+	cseq.SeqNo++
 	cseq.MethodName = sip.BYE
 
 	return byeRequest
