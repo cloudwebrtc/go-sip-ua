@@ -1,8 +1,7 @@
 package session
 
-import "github.com/ghettovoice/gosip/sip"
-
-var REASON_PHRASE = map[sip.StatusCode]string{
+// ReasonPhrase .
+var ReasonPhrase = map[uint16]string{
 	100: "Trying",
 	180: "Ringing",
 	181: "Call Is Being Forwarded",
@@ -77,8 +76,35 @@ var REASON_PHRASE = map[sip.StatusCode]string{
 	606: "Not Acceptable",
 }
 
-var ALLOWED_METHODS = "INVITE,ACK,CANCEL,BYE,UPDATE,MESSAGE,OPTIONS,REFER,INFO"
-var ACCEPTED_BODY_TYPES = "application/sdp, application/dtmf-relay"
-var MAX_FORWARDS = 69
-var SESSION_EXPIRES = 90
-var MIN_SESSION_EXPIRES = 60
+const (
+	AllowedMethods    = "INVITE,ACK,CANCEL,BYE,UPDATE,MESSAGE,OPTIONS,REFER,INFO"
+	AcceptedBody      = "application/sdp, application/dtmf-relay"
+	MaxForwards       = 69
+	SessionExpires    = 90
+	MinSessionExpires = 60
+)
+
+type Status string
+
+const (
+	InviteSent       Status = "InviteSent"       /**< After INVITE s sent */
+	InviteReceived   Status = "InviteReceived"   /**< After INVITE s received. */
+	ReInviteReceived Status = "ReInviteReceived" /**< After re-INVITE/UPDATE s received */
+	//Answer         Status = "Answer"           /**< After response for re-INVITE/UPDATE. */
+	Provisional      Status = "Provisional" /**< After response for 1XX. */
+	EarlyMedia       Status = "EarlyMedia"  /**< After response 1XX with sdp. */
+	WaitingForAnswer Status = "WaitingForAnswer"
+	WaitingForACK    Status = "WaitingForACK" /**< After 2xx s sent/received. */
+	Answered         Status = "Answered"
+	Canceled         Status = "Canceled"
+	Confirmed        Status = "Confirmed"  /**< After ACK s sent/received. */
+	Failure          Status = "Failure"    /**< Session s rejected or canceled. */
+	Terminated       Status = "Terminated" /**< Session s terminated. */
+)
+
+type Direction string
+
+const (
+	Outgoing Direction = "Outgoing"
+	Incoming Direction = "Incoming"
+)

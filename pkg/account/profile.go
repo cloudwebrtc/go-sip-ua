@@ -62,6 +62,3 @@ type RegisterState struct {
 	Expiration uint32
 	Response   sip.Response
 }
-
-//RegisterHandler .
-type RegisterHandler func(regState RegisterState)

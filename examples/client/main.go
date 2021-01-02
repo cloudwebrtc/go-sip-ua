@@ -117,7 +117,7 @@ func main() {
 	called := "400"
 	target.FUser = sip.String{Str: called}
 
-	go ua.Invite(profile, target, &sdp)
+	go ua.Invite(profile, target.String(), &sdp)
 
 	time.Sleep(time.Second * 3)
 	go ua.SendRegister(profile, target, 0)

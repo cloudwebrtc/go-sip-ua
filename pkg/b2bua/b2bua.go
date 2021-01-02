@@ -12,7 +12,6 @@ import (
 	"github.com/cloudwebrtc/go-sip-ua/pkg/util"
 	"github.com/ghettovoice/gosip/log"
 	"github.com/ghettovoice/gosip/sip"
-	"github.com/ghettovoice/gosip/sip/parser"
 	"github.com/ghettovoice/gosip/transport"
 	"github.com/sirupsen/logrus"
 )
@@ -85,15 +84,6 @@ func NewB2BUA() *B2BUA {
 	ua.InviteStateHandler = func(sess *session.Session, req *sip.Request, resp *sip.Response, state session.Status) {
 		logger.Infof("InviteStateHandler: state => %v, type => %s", state, sess.Direction())
 
-		/*
-			if state == session.InviteReceived {
-				sess.Provisional(180, "Ringing")
-				answer := "sdp ...."
-				sess.ProvideAnswer(answer)
-				sess.Accept(200)
-			}
-		*/
-
 		switch state {
 		// Handle incoming call.
 		case session.InviteReceived:
@@ -112,12 +102,9 @@ func NewB2BUA() *B2BUA {
 					displayName = from.DisplayName.String()
 				}
 				profile := account.NewProfile(from.Address.User().String(), displayName, nil, 0)
-				target, err := parser.ParseSipUri("sip:" + aor.User().String() + "@" + instance.Source + ";transport=" + instance.Transport)
-				if err != nil {
-					logger.Error(err)
-				}
-				sdp := (*req).Body()
-				dest, err := ua.Invite(profile, target, &sdp)
+				target := "sip:" + aor.User().String() + "@" + instance.Source + ";transport=" + instance.Transport
+				offer := sess.RemoteSdp()
+				dest, err := ua.Invite(profile, target, &offer)
 				if err != nil {
 					logger.Errorf("B-Leg session error: %v", err)
 					continue
@@ -142,10 +129,8 @@ func NewB2BUA() *B2BUA {
 		case session.Provisional:
 			call := b.findCall(sess)
 			if call != nil && call.dest == sess {
-				sdp := (*resp).Body()
-				if len(sdp) > 0 {
-					call.src.ProvideAnswer(sdp)
-				}
+				answer := call.dest.RemoteSdp()
+				call.src.ProvideAnswer(answer)
 				call.src.Provisional((*resp).StatusCode(), (*resp).Reason())
 			}
 			break
@@ -154,8 +139,8 @@ func NewB2BUA() *B2BUA {
 		case session.Confirmed:
 			call := b.findCall(sess)
 			if call != nil && call.dest == sess {
-				sdp := (*resp).Body()
-				call.src.ProvideAnswer(sdp)
+				answer := call.dest.RemoteSdp()
+				call.src.ProvideAnswer(answer)
 				call.src.Accept(200)
 			}
 			break

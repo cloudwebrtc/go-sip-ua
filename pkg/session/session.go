@@ -9,33 +9,6 @@ import (
 	gosip_util "github.com/ghettovoice/gosip/util"
 )
 
-type Status string
-
-const (
-	InviteSent       Status = "InviteSent"       /**< After INVITE s sent */
-	InviteReceived   Status = "InviteReceived"   /**< After INVITE s received. */
-	ReInviteReceived Status = "ReInviteReceived" /**< After re-INVITE/UPDATE s received */
-	//Answer         Status = "Answer"           /**< After response for re-INVITE/UPDATE. */
-	Provisional      Status = "Provisional" /**< After response for 1XX. */
-	EarlyMedia       Status = "EarlyMedia"  /**< After response 1XX with sdp. */
-	WaitingForAnswer Status = "WaitingForAnswer"
-	WaitingForACK    Status = "WaitingForACK" /**< After 2xx s sent/received. */
-	Answered         Status = "Answered"
-	Canceled         Status = "Canceled"
-	Confirmed        Status = "Confirmed"  /**< After ACK s sent/received. */
-	Failure          Status = "Failure"    /**< Session s rejected or canceled. */
-	Terminated       Status = "Terminated" /**< Session s terminated. */
-)
-
-type Direction string
-
-const (
-	Outgoing Direction = "Outgoing"
-	Incoming Direction = "Incoming"
-)
-
-type InviteSessionHandler func(s *Session, req *sip.Request, resp *sip.Response, status Status)
-
 type RequestCallback func(ctx context.Context, request sip.Request, authorizer sip.Authorizer, waitForResult bool) (sip.Response, error)
 
 type Session struct {
@@ -86,10 +59,12 @@ func NewInviteSession(reqcb RequestCallback, uaType string,
 		s.localURI = sip.Address{Uri: to.Address, Params: to.Params}
 		s.remoteURI = sip.Address{Uri: from.Address, Params: from.Params}
 		s.remoteTarget = contact.Address
+		s.offer = req.Body()
 	} else if uaType == "UAC" {
 		s.localURI = sip.Address{Uri: from.Address, Params: from.Params}
 		s.remoteURI = sip.Address{Uri: to.Address, Params: to.Params}
 		s.remoteTarget = req.Recipient()
+		s.offer = req.Body()
 	}
 
 	s.request = req
@@ -102,6 +77,20 @@ func (s *Session) Log() log.Logger {
 
 func (s *Session) String() string {
 	return "Local: " + s.localURI.String() + ", Remote: " + s.remoteURI.String()
+}
+
+func (s *Session) LocalSdp() string {
+	if s.uaType == "UAC" {
+		return s.offer
+	}
+	return s.answer
+}
+
+func (s *Session) RemoteSdp() string {
+	if s.uaType == "UAS" {
+		return s.offer
+	}
+	return s.answer
 }
 
 func (s *Session) Contact() string {
@@ -173,6 +162,11 @@ func (s *Session) StoreResponse(response sip.Response) {
 		if to.Params != nil && to.Params.Has("tag") {
 			//Update to URI.
 			s.remoteURI = sip.Address{Uri: to.Address, Params: to.Params}
+		}
+
+		sdp := response.Body()
+		if len(sdp) > 0 {
+			s.answer = sdp
 		}
 	}
 	s.response = response
@@ -305,7 +299,7 @@ func (s *Session) Accept(statusCode sip.StatusCode) {
 		return
 	}
 	request := s.request
-	response := sip.NewResponseFromRequest(request.MessageID(), request, 200, "OK", s.answer)
+	response := sip.NewResponseFromRequest(request.MessageID(), request, statusCode, "OK", s.answer)
 
 	hdrs := request.GetHeaders("Content-Type")
 	if len(hdrs) == 0 {
@@ -323,7 +317,7 @@ func (s *Session) Accept(statusCode sip.StatusCode) {
 }
 
 // Redirect send a 3xx
-func (s *Session) Redirect(addr *sip.Address, code sip.StatusCode) {
+func (s *Session) Redirect(target string, code sip.StatusCode) {
 
 }
 

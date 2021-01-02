@@ -13,20 +13,28 @@ import (
 
 	"github.com/ghettovoice/gosip/log"
 	"github.com/ghettovoice/gosip/sip"
+	"github.com/ghettovoice/gosip/sip/parser"
 	"github.com/ghettovoice/gosip/transaction"
 	"github.com/ghettovoice/gosip/util"
 )
 
+// UserAgentConfig .
 type UserAgentConfig struct {
 	UserAgent string
 	SipStack  *stack.SipStack
 	log       log.Logger
 }
 
+//InviteSessionHandler .
+type InviteSessionHandler func(s *session.Session, req *sip.Request, resp *sip.Response, status session.Status)
+
+//RegisterHandler .
+type RegisterHandler func(regState account.RegisterState)
+
 //UserAgent .
 type UserAgent struct {
-	InviteStateHandler   session.InviteSessionHandler
-	RegisterStateHandler account.RegisterHandler
+	InviteStateHandler   InviteSessionHandler
+	RegisterStateHandler RegisterHandler
 	config               *UserAgentConfig
 	iss                  sync.Map /*Invite Session*/
 	log                  log.Logger
@@ -245,13 +253,19 @@ func (ua *UserAgent) SendRegister(profile *account.Profile, target sip.SipUri, e
 	ua.handleRegisterState(profile, resp, err)
 }
 
-func (ua *UserAgent) Invite(profile *account.Profile, target sip.SipUri, body *string) (*session.Session, error) {
+func (ua *UserAgent) Invite(profile *account.Profile, target string, body *string) (*session.Session, error) {
 
-	from := buildFrom(target, profile.User, profile.DisplayName)
-	contact := ua.buildContact(target, &profile.InstanceID)
-	to := buildTo(target)
+	targetURI, err := parser.ParseSipUri(target)
+	if err != nil {
+		ua.Log().Error(err)
+		return nil, err
+	}
 
-	request, err := ua.BuildRequest(sip.INVITE, from, to, contact, target, nil)
+	from := buildFrom(targetURI, profile.User, profile.DisplayName)
+	contact := ua.buildContact(targetURI, &profile.InstanceID)
+	to := buildTo(targetURI)
+
+	request, err := ua.BuildRequest(sip.INVITE, from, to, contact, targetURI, nil)
 	if err != nil {
 		ua.Log().Errorf("INVITE: err = %v", err)
 		return nil, err
