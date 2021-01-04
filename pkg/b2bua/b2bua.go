@@ -32,6 +32,7 @@ type B2BUA struct {
 	registry registry.Registry
 	domains  []string
 	calls    []*B2BCall
+	rfc8599  *registry.RFC8599
 }
 
 var (
@@ -43,10 +44,11 @@ func init() {
 }
 
 //NewB2BUA .
-func NewB2BUA() *B2BUA {
+func NewB2BUA(pushCallback registry.PushCallback) *B2BUA {
 	b := &B2BUA{
 		registry: registry.Registry(&*registry.NewMemoryRegistry()),
 		accounts: make(map[string]string),
+		rfc8599:  registry.NewRFC8599(pushCallback),
 	}
 
 	stack := stack.NewSipStack(&stack.SipStackConfig{
@@ -90,13 +92,8 @@ func NewB2BUA() *B2BUA {
 			to, _ := (*req).To()
 			from, _ := (*req).From()
 			aor := to.Address
-			contacts, err := b.registry.GetContacts(aor)
-			if err != nil {
-				sess.Reject(404, fmt.Sprintf("%v Not found", aor))
-				return
-			}
-			sess.Provisional(100, "Trying")
-			for _, instance := range *contacts {
+
+			doInvite := func(instance *registry.ContactInstance) {
 				displayName := ""
 				if from.DisplayName != nil {
 					displayName = from.DisplayName.String()
@@ -107,11 +104,39 @@ func NewB2BUA() *B2BUA {
 				dest, err := ua.Invite(profile, target, &offer)
 				if err != nil {
 					logger.Errorf("B-Leg session error: %v", err)
-					continue
+					return
 				}
 				b.calls = append(b.calls, &B2BCall{src: sess, dest: dest})
 			}
+
+			// Try to find online contact records.
+			if contacts, found := b.registry.GetContacts(aor); found {
+				sess.Provisional(100, "Trying")
+				for _, instance := range *contacts {
+					doInvite(instance)
+				}
+				return
+			}
+
+			// Pushable: try to find pn-params in contact records.
+			// Try to push the UA and wait for it to wake up.
+			pusher, ok := b.rfc8599.TryPush(aor, from)
+			if ok {
+				sess.Provisional(100, "Trying")
+				instance, err := pusher.WaitContactOnline()
+				if err != nil {
+					logger.Errorf("Push failed, error: %v", err)
+					sess.Reject(500, fmt.Sprint("Push failed"))
+					return
+				}
+				doInvite(instance)
+				return
+			}
+
+			// Could not found any records
+			sess.Reject(404, fmt.Sprintf("%v Not found", aor))
 			break
+
 		// Handle re-INVITE or UPDATE.
 		case session.ReInviteReceived:
 			logger.Infof("re-INVITE")
@@ -264,11 +289,13 @@ func (b *B2BUA) handleRegister(request sip.Request, tx sip.ServerTransaction) {
 		logger.Infof("Registered [%v] expires [%d] source %s", to, expires, request.Source())
 		reason = "Registered"
 		b.registry.AddAor(aor, instance)
+		b.rfc8599.HandleContactInstance(aor, instance)
 	} else {
 		logger.Infof("Logged out [%v] expires [%d] ", to, expires)
-		reason = "Unregistered"
+		reason = "UnRegistered"
 		instance := registry.NewContactInstanceForRequest(request)
 		b.registry.RemoveContact(aor, instance)
+		b.rfc8599.HandleContactInstance(aor, instance)
 	}
 
 	resp := sip.NewResponseFromRequest(request.MessageID(), request, 200, reason, "")

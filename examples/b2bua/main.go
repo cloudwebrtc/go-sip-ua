@@ -11,6 +11,7 @@ import (
 
 	"github.com/c-bata/go-prompt"
 	"github.com/cloudwebrtc/go-sip-ua/pkg/b2bua"
+	"github.com/cloudwebrtc/go-sip-ua/pkg/registry"
 )
 
 func completer(d prompt.Document) []prompt.Suggest {
@@ -46,6 +47,8 @@ func consoleLoop(b2bua *b2bua.B2BUA) {
 
 		switch t {
 		case "users":
+			fallthrough
+		case "ul":
 			accounts := b2bua.GetAccounts()
 			if len(accounts) > 0 {
 				fmt.Printf("Users:\n")
@@ -57,6 +60,8 @@ func consoleLoop(b2bua *b2bua.B2BUA) {
 				fmt.Printf("No users\n")
 			}
 		case "calls":
+			fallthrough
+		case "cl":
 			calls := b2bua.Calls()
 			if len(calls) > 0 {
 				fmt.Printf("Calls:\n")
@@ -67,16 +72,23 @@ func consoleLoop(b2bua *b2bua.B2BUA) {
 				fmt.Printf("No active calls\n")
 			}
 		case "onlines":
+			fallthrough
+		case "rr":
 			aors := b2bua.GetRegistry().GetAllContacts()
 			if len(aors) > 0 {
 				for aor, instances := range aors {
 					fmt.Printf("AOR: %v:\n", aor)
 					for _, instance := range instances {
-						fmt.Printf("\t%v, Expires: %d, Source: %v, Transport: %v\n",
+						pn := ""
+						//if instance.PNParams != nil {
+						//	pn = fmt.Sprintf("\n\tPN-Params: %v", instance.PNParams.String())
+						//}
+						fmt.Printf("\t%v, Expires: %d, Source: %v, Transport: %v %v\n",
 							(*instance).UserAgent,
 							(*instance).RegExpires,
 							(*instance).Source,
-							(*instance).Transport)
+							(*instance).Transport,
+							pn)
 					}
 				}
 			} else {
@@ -112,7 +124,16 @@ func main() {
 		http.ListenAndServe(":6655", nil)
 	}()
 
-	b2bua := b2bua.NewB2BUA()
+	//TODO: Add a third-party push package.
+	pushCallback := func(pn *registry.PNParams, payload map[string]string) error {
+		switch pn.Provider {
+		case "apns":
+		case "fcm":
+		}
+		return fmt.Errorf("provider %v not found", pn.Provider)
+	}
+
+	b2bua := b2bua.NewB2BUA(pushCallback)
 
 	// Add sample accounts.
 	b2bua.AddAccount("100", "100")

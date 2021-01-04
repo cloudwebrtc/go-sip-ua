@@ -82,10 +82,15 @@ func (mr *MemoryRegistry) RemoveContact(aor sip.Uri, instance *ContactInstance) 
 	return err
 }
 
-func (mr *MemoryRegistry) GetContacts(aor sip.Uri) (*map[string]*ContactInstance, error) {
+func (mr *MemoryRegistry) GetContacts(aor sip.Uri) (*map[string]*ContactInstance, bool) {
 	mr.mutex.Lock()
 	defer mr.mutex.Unlock()
-	return findInstances(mr.aors, aor)
+	instance, err := findInstances(mr.aors, aor)
+	if err != nil {
+		return nil, false
+	}
+
+	return instance, true
 }
 
 func (mr *MemoryRegistry) GetAllContacts() map[sip.Uri]map[string]*ContactInstance {
