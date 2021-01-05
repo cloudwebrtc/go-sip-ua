@@ -12,6 +12,9 @@ import (
 	"github.com/c-bata/go-prompt"
 	"github.com/cloudwebrtc/go-sip-ua/pkg/b2bua"
 	"github.com/cloudwebrtc/go-sip-ua/pkg/registry"
+
+	"github.com/cloudwebrtc/go-sip-ua/examples/b2bua/fcm"
+	"github.com/cloudwebrtc/go-sip-ua/examples/b2bua/pushkit"
 )
 
 func completer(d prompt.Document) []prompt.Suggest {
@@ -134,12 +137,15 @@ func main() {
 		http.ListenAndServe(":6655", nil)
 	}()
 
-	//TODO: Add a third-party push package.
 	pushCallback := func(pn *registry.PNParams, payload map[string]string) error {
 		fmt.Printf("Handle Push Request:\nprovider=%v\nparam=%v\nprid=%v\npayload=%v", pn.Provider, pn.Param, pn.PRID, payload)
 		switch pn.Provider {
 		case "apns":
+			pushkit.DoPushKit("./voip-callkeep.p12", pn.PRID, payload)
+			return nil
 		case "fcm":
+			fcm.FCMPush("service-account.json", pn.PRID, payload)
+			return nil
 		}
 		return fmt.Errorf("%v provider not found", pn.Provider)
 	}
