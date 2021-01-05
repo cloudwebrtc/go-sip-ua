@@ -1,6 +1,9 @@
 package registry
 
-import "github.com/ghettovoice/gosip/sip"
+import (
+	"github.com/ghettovoice/gosip/sip"
+	"github.com/ghettovoice/gosip/transport"
+)
 
 type ContactInstance struct {
 	Contact     *sip.ContactHeader
@@ -56,4 +59,5 @@ type Registry interface {
 	RemoveContact(aor sip.Uri, instance *ContactInstance) error
 	GetContacts(aor sip.Uri) (*map[string]*ContactInstance, bool)
 	GetAllContacts() map[sip.Uri]map[string]*ContactInstance
+	HandleConnectionError(connError *transport.ConnectionError) bool
 }

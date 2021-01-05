@@ -50,20 +50,21 @@ type SipStackConfig struct {
 
 // SipStack a golang SIP Stack
 type SipStack struct {
-	listenPorts     map[string]*sip.Port
-	tp              transport.Layer
-	tx              transaction.Layer
-	host            string
-	ip              net.IP
-	inShutdown      int32
-	hwg             *sync.WaitGroup
-	hmu             *sync.RWMutex
-	requestHandlers map[sip.RequestMethod]RequestHandler
-	extensions      []string
-	invites         map[transaction.TxKey]sip.Request
-	invitesLock     *sync.RWMutex
-	authenticator   *ServerAuthManager
-	log             log.Logger
+	listenPorts           map[string]*sip.Port
+	tp                    transport.Layer
+	tx                    transaction.Layer
+	host                  string
+	ip                    net.IP
+	inShutdown            int32
+	hwg                   *sync.WaitGroup
+	hmu                   *sync.RWMutex
+	requestHandlers       map[sip.RequestMethod]RequestHandler
+	handleConnectionError func(err *transport.ConnectionError)
+	extensions            []string
+	invites               map[transaction.TxKey]sip.Request
+	invitesLock           *sync.RWMutex
+	authenticator         *ServerAuthManager
+	log                   log.Logger
 }
 
 // NewSipStack creates new instance of SipStack.
@@ -132,7 +133,6 @@ func NewSipStack(config *SipStackConfig, logger log.Logger) *SipStack {
 
 	s.tp = transport.NewLayer(ip, dnsResolver, config.MsgMapper, logger.WithPrefix("transport.Layer"))
 	s.tx = transaction.NewLayer(s.tp, logger.WithPrefix("transaction.Layer"))
-
 	go s.serve()
 
 	return s
@@ -143,7 +143,7 @@ func (s *SipStack) Log() log.Logger {
 	return s.log
 }
 
-// Listen starts serving listeners on the provided address
+// ListenTLS starts serving listeners on the provided address
 func (s *SipStack) ListenTLS(protocol string, listenAddr string, options *transport.TLSConfig) error {
 	network := strings.ToUpper(protocol)
 	err := s.tp.Listen(network, listenAddr, options)
@@ -208,6 +208,12 @@ func (s *SipStack) serve() {
 			}
 
 			s.Log().Errorf("received SIP transport error: %s", err)
+
+			if connError, ok := err.(*transport.ConnectionError); ok {
+				if s.handleConnectionError != nil {
+					s.handleConnectionError(connError)
+				}
+			}
 		}
 	}
 }
@@ -430,6 +436,12 @@ func (s *SipStack) OnRequest(method sip.RequestMethod, handler RequestHandler) e
 	s.hmu.Unlock()
 
 	return nil
+}
+
+func (s *SipStack) OnConnectionError(handler func(err *transport.ConnectionError)) {
+	s.hmu.Lock()
+	s.handleConnectionError = handler
+	s.hmu.Unlock()
 }
 
 func (s *SipStack) appendAutoHeaders(msg sip.Message) {

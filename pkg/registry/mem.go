@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/ghettovoice/gosip/sip"
+	"github.com/ghettovoice/gosip/transport"
 )
 
 // MemoryRegistry Address-of-Record registry using memory.
@@ -80,6 +81,26 @@ func (mr *MemoryRegistry) RemoveContact(aor sip.Uri, instance *ContactInstance) 
 		return nil
 	}
 	return err
+}
+
+func (mr *MemoryRegistry) HandleConnectionError(connError *transport.ConnectionError) bool {
+	mr.mutex.Lock()
+	defer mr.mutex.Unlock()
+	result := false
+	for aor, cis := range mr.aors {
+		for source := range cis {
+			if source == connError.Source {
+				delete(cis, source)
+				result = true
+				break
+			}
+		}
+		if len(cis) == 0 {
+			delete(mr.aors, aor)
+			break
+		}
+	}
+	return result
 }
 
 func (mr *MemoryRegistry) GetContacts(aor sip.Uri) (*map[string]*ContactInstance, bool) {

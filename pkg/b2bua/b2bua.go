@@ -60,6 +60,8 @@ func NewB2BUA(pushCallback registry.PushCallback) *B2BUA {
 		},
 	}, logger)
 
+	stack.OnConnectionError(b.handleConnectionError)
+
 	if err := stack.Listen("udp", "0.0.0.0:5060"); err != nil {
 		logger.Panic(err)
 	}
@@ -304,4 +306,9 @@ func (b *B2BUA) handleRegister(request sip.Request, tx sip.ServerTransaction) {
 	sip.CopyHeaders("Content-Length", request, resp)
 	tx.Respond(resp)
 
+}
+
+func (b *B2BUA) handleConnectionError(connError *transport.ConnectionError) {
+	logger.Debugf("Handle Connection Lost: Source: %v, Dest: %v, Network: %v", connError.Source, connError.Dest, connError.Net)
+	b.registry.HandleConnectionError(connError)
 }
