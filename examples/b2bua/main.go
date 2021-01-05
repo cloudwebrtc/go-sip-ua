@@ -94,6 +94,16 @@ func consoleLoop(b2bua *b2bua.B2BUA) {
 			} else {
 				fmt.Printf("No online devices\n")
 			}
+		case "pnr":
+			pnrs := b2bua.GetRFC8599().PNRecords()
+			if len(pnrs) > 0 {
+				fmt.Printf("PN Records:\n")
+				for pn, aor := range pnrs {
+					fmt.Printf("AOR: %v => pn-provider=%v, pn-param=%v, pn-prid=%v\n", aor, pn.Provider, pn.Param, pn.PRID)
+				}
+			} else {
+				fmt.Printf("No online devices\n")
+			}
 		case "exit":
 			fmt.Println("Exit now.")
 			b2bua.Shutdown()
@@ -126,11 +136,12 @@ func main() {
 
 	//TODO: Add a third-party push package.
 	pushCallback := func(pn *registry.PNParams, payload map[string]string) error {
+		fmt.Printf("Handle Push Request:\nprovider=%v\nparam=%v\nprid=%v\npayload=%v", pn.Provider, pn.Param, pn.PRID, payload)
 		switch pn.Provider {
 		case "apns":
 		case "fcm":
 		}
-		return fmt.Errorf("provider %v not found", pn.Provider)
+		return fmt.Errorf("%v provider not found", pn.Provider)
 	}
 
 	b2bua := b2bua.NewB2BUA(pushCallback)

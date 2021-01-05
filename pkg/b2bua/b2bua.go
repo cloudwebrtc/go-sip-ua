@@ -268,6 +268,10 @@ func (b *B2BUA) GetRegistry() registry.Registry {
 	return b.registry
 }
 
+func (b *B2BUA) GetRFC8599() *registry.RFC8599 {
+	return b.rfc8599
+}
+
 func (b *B2BUA) requestCredential(username string) (string, string, error) {
 	if password, found := b.accounts[username]; found {
 		logger.Infof("Found user %s", username)

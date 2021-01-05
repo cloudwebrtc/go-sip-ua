@@ -27,8 +27,8 @@ func (p *PNParams) Equals(other *PNParams) bool {
 	return p.Provider == other.Provider && p.Param == other.Param && p.PRID == other.PRID
 }
 
-//DisablePN https://tools.ietf.org/html/rfc8599#section-4.1.2
-func (p *PNParams) DisablePN() bool {
+//Disabled https://tools.ietf.org/html/rfc8599#section-4.1.2
+func (p *PNParams) Disabled() bool {
 	return len(p.PRID) == 0
 }
 
@@ -48,10 +48,14 @@ func NewRFC8599(callback PushCallback) *RFC8599 {
 	}
 }
 
+func (r *RFC8599) PNRecords() map[PNParams]sip.Uri {
+	return r.records
+}
+
 func (r *RFC8599) HandleContactInstance(aor sip.Uri, instance *ContactInstance) {
 	pn := instance.GetPNParams()
 	if pn != nil {
-		disable := pn.DisablePN()
+		disable := pn.Disabled()
 		if disable {
 			//Remove pn record.
 			for params, uri := range r.records {
@@ -86,17 +90,20 @@ func (r *RFC8599) TryPush(aor sip.Uri, from *sip.FromHeader) (*Pusher, bool) {
 	for params, uri := range r.records {
 
 		if uri.User() == aor.User() {
-
+			displayName := ""
+			if from.DisplayName != nil {
+				displayName = from.DisplayName.String()
+			}
 			payload := map[string]string{
 				"caller_id":      from.Address.User().String(),
-				"caller_name":    from.DisplayName.String(),
+				"caller_name":    displayName,
 				"caller_id_type": "number",
 				"has_video":      "false",
 			}
 
 			if err := r.PushCallback(&params, payload); err != nil {
 				//push failed,.
-				log.Printf("Push failed %v", err)
+				log.Printf("Push failed: %v", err)
 				return nil, false
 			}
 			pusher := NewPusher()
