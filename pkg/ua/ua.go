@@ -13,7 +13,6 @@ import (
 
 	"github.com/ghettovoice/gosip/log"
 	"github.com/ghettovoice/gosip/sip"
-	"github.com/ghettovoice/gosip/sip/parser"
 	"github.com/ghettovoice/gosip/transaction"
 	"github.com/ghettovoice/gosip/util"
 )
@@ -81,20 +80,19 @@ func (ua *UserAgent) handleInviteState(is *session.Session, request *sip.Request
 	}
 }
 
-func (ua *UserAgent) BuildRequest(
+func (ua *UserAgent) buildRequest(
 	method sip.RequestMethod,
 	from *sip.Address,
 	to *sip.Address,
 	contact *sip.Address,
-	target sip.SipUri,
+	recipient sip.SipUri,
 	callID *sip.CallID) (*sip.Request, error) {
 
-	builder := sip.NewRequestBuilder().SetMethod(method).SetFrom(from).SetTo(to).SetRecipient(target.Clone()).AddVia(ua.buildViaHopHeader(target))
+	builder := sip.NewRequestBuilder().SetMethod(method).SetFrom(from).SetTo(to).SetContact(contact).SetRecipient(recipient.Clone()).AddVia(ua.buildViaHopHeader(recipient))
 
 	if callID != nil {
 		builder.SetCallID(callID)
 	}
-	builder.SetContact(contact)
 
 	userAgent := sip.UserAgentHeader(ua.config.UserAgent)
 	builder.SetUserAgent(&userAgent)
@@ -107,27 +105,6 @@ func (ua *UserAgent) BuildRequest(
 
 	ua.Log().Debugf("buildRequest %s => %v", method, req)
 	return &req, nil
-}
-
-func buildFrom(target sip.SipUri, user string, displayName string) *sip.Address {
-	return &sip.Address{
-		DisplayName: sip.String{Str: displayName},
-		Uri: &sip.SipUri{
-			FUser: sip.String{Str: user},
-			FHost: target.Host(),
-		},
-		Params: sip.NewParams().Add("tag", sip.String{Str: util.RandString(8)}),
-	}
-}
-
-func buildTo(target sip.SipUri) *sip.Address {
-	return &sip.Address{
-		Uri: &sip.SipUri{
-			FIsEncrypted: target.IsEncrypted(),
-			FUser:        target.User(),
-			FHost:        target.Host(),
-		},
-	}
 }
 
 func (ua *UserAgent) buildViaHopHeader(target sip.SipUri) *sip.ViaHop {
@@ -157,41 +134,6 @@ func (ua *UserAgent) buildViaHopHeader(target sip.SipUri) *sip.ViaHop {
 		Params:          sip.NewParams().Add("branch", sip.String{Str: sip.GenerateBranch()}),
 	}
 	return viaHop
-}
-
-func (ua *UserAgent) buildContact(uri sip.SipUri, instanceID *string) *sip.Address {
-	s := ua.config.SipStack
-	contact := &sip.Address{
-		Uri: &sip.SipUri{
-			FHost:      "0.0.0.0",
-			FUriParams: uri.FUriParams,
-		},
-	}
-
-	if instanceID != nil {
-		contact.Params = sip.NewParams().Add("+sip.instance", sip.String{Str: *instanceID})
-	}
-
-	protocol := "udp"
-	if nt, ok := uri.UriParams().Get("transport"); ok {
-		protocol = nt.String()
-	}
-
-	target := s.GetNetworkInfo(protocol)
-
-	var host string = target.Host
-	if net.ParseIP(uri.Host()).IsLoopback() {
-		host = "127.0.0.1"
-	}
-
-	if contact.Uri.Host() == "0.0.0.0" {
-		contact.Uri.SetHost(host)
-	}
-
-	if contact.Uri.Port() == nil {
-		contact.Uri.SetPort(target.Port)
-	}
-	return contact
 }
 
 func (ua *UserAgent) handleRegisterState(profile *account.Profile, resp sip.Response, err error) {
@@ -231,13 +173,20 @@ func (ua *UserAgent) handleRegisterState(profile *account.Profile, resp sip.Resp
 	}
 }
 
-func (ua *UserAgent) SendRegister(profile *account.Profile, target sip.SipUri, expires uint32) {
+func (ua *UserAgent) SendRegister(profile *account.Profile, recipient sip.SipUri, expires uint32) {
 
-	from := buildFrom(target, profile.User, profile.DisplayName)
-	contact := ua.buildContact(target, &profile.InstanceID)
+	from := &sip.Address{
+		Uri:    profile.Uri,
+		Params: sip.NewParams().Add("tag", sip.String{Str: util.RandString(8)}),
+	}
 
-	to := buildTo(target)
-	request, err := ua.BuildRequest(sip.REGISTER, from, to, contact, target, nil)
+	to := &sip.Address{
+		Uri: profile.Uri,
+	}
+
+	contact := profile.Contact()
+
+	request, err := ua.buildRequest(sip.REGISTER, from, to, contact, recipient, nil)
 	if err != nil {
 		ua.Log().Errorf("Register: err = %v", err)
 		return
@@ -246,26 +195,28 @@ func (ua *UserAgent) SendRegister(profile *account.Profile, target sip.SipUri, e
 	(*request).AppendHeader(&expiresHeader)
 
 	var authorizer *auth.ClientAuthorizer = nil
-	if profile.Auth != nil {
-		authorizer = auth.NewClientAuthorizer(profile.Auth.AuthName, profile.Auth.Password)
+	if profile.AuthInfo != nil {
+		authorizer = auth.NewClientAuthorizer(profile.AuthInfo.AuthUser, profile.AuthInfo.Password)
 	}
 	resp, err := ua.RequestWithContext(context.TODO(), *request, authorizer, true)
 	ua.handleRegisterState(profile, resp, err)
 }
 
-func (ua *UserAgent) Invite(profile *account.Profile, target string, body *string) (*session.Session, error) {
+func (ua *UserAgent) Invite(profile *account.Profile, target sip.Uri, recipient sip.SipUri, body *string) (*session.Session, error) {
 
-	targetURI, err := parser.ParseSipUri(target)
-	if err != nil {
-		ua.Log().Error(err)
-		return nil, err
+	from := &sip.Address{
+		DisplayName: sip.String{Str: profile.DisplayName},
+		Uri:         profile.Uri,
+		Params:      sip.NewParams().Add("tag", sip.String{Str: util.RandString(8)}),
 	}
 
-	from := buildFrom(targetURI, profile.User, profile.DisplayName)
-	contact := ua.buildContact(targetURI, &profile.InstanceID)
-	to := buildTo(targetURI)
+	contact := profile.Contact()
 
-	request, err := ua.BuildRequest(sip.INVITE, from, to, contact, targetURI, nil)
+	to := &sip.Address{
+		Uri: target,
+	}
+
+	request, err := ua.buildRequest(sip.INVITE, from, to, contact, recipient, nil)
 	if err != nil {
 		ua.Log().Errorf("INVITE: err = %v", err)
 		return nil, err
@@ -278,8 +229,8 @@ func (ua *UserAgent) Invite(profile *account.Profile, target string, body *strin
 	}
 
 	var authorizer *auth.ClientAuthorizer = nil
-	if profile.Auth != nil {
-		authorizer = auth.NewClientAuthorizer(profile.Auth.AuthName, profile.Auth.Password)
+	if profile.AuthInfo != nil {
+		authorizer = auth.NewClientAuthorizer(profile.AuthInfo.AuthUser, profile.AuthInfo.Password)
 	}
 
 	resp, err := ua.RequestWithContext(context.TODO(), *request, authorizer, false)
@@ -304,8 +255,8 @@ func (ua *UserAgent) Invite(profile *account.Profile, target string, body *strin
 	return nil, fmt.Errorf("Invite session not found, unknown errors.")
 }
 
-func (ua *UserAgent) Request(req *sip.Request) {
-	ua.config.SipStack.Request(*req)
+func (ua *UserAgent) Request(req *sip.Request) (sip.ClientTransaction, error) {
+	return ua.config.SipStack.Request(*req)
 }
 
 func (ua *UserAgent) handleBye(request sip.Request, tx sip.ServerTransaction) {

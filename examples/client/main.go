@@ -91,36 +91,44 @@ func main() {
 	}
 
 	ua.RegisterStateHandler = func(state account.RegisterState) {
-		logger.Infof("RegisterStateHandler: user => %s, state => %v, expires => %v", state.Account.Auth.AuthName, state.StatusCode, state.Expiration)
+		logger.Infof("RegisterStateHandler: user => %s, state => %v, expires => %v", state.Account.AuthInfo.AuthUser, state.StatusCode, state.Expiration)
 	}
 
-	profile := account.NewProfile("100", "goSIP",
+	uri, err := parser.ParseUri("sip:100@127.0.0.1")
+	if err != nil {
+		logger.Error(err)
+	}
+
+	profile := account.NewProfile(uri.Clone(), "goSIP",
 		&account.AuthInfo{
-			AuthName: "100",
+			AuthUser: "100",
 			Password: "100",
 			Realm:    "",
 		},
 		1800,
 	)
 
-	target, err := parser.ParseSipUri("sip:100@127.0.0.1:5081;transport=wss")
+	recipient, err := parser.ParseSipUri("sip:127.0.0.1:5081;transport=wss")
 	if err != nil {
 		logger.Error(err)
 	}
 
-	go ua.SendRegister(profile, target, profile.Expires)
+	go ua.SendRegister(profile, recipient, profile.Expires)
 	time.Sleep(time.Second * 3)
 
 	udp = createUdp()
 	udpLaddr := udp.LocalAddr()
 	sdp := mock.BuildLocalSdp(udpLaddr.IP.String(), udpLaddr.Port)
-	called := "400"
-	target.FUser = sip.String{Str: called}
 
-	go ua.Invite(profile, target.String(), &sdp)
+	called, err2 := parser.ParseUri("sip:400@127.0.0.1")
+	if err2 != nil {
+		logger.Error(err)
+	}
+
+	go ua.Invite(profile, called, recipient, &sdp)
 
 	time.Sleep(time.Second * 3)
-	go ua.SendRegister(profile, target, 0)
+	go ua.SendRegister(profile, recipient, 0)
 
 	<-stop
 

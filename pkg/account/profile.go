@@ -18,32 +18,50 @@ func init() {
 
 //AuthInfo .
 type AuthInfo struct {
-	AuthName string
+	AuthUser string
 	Realm    string
 	Password string
+	Ha1      string
 }
 
 // Profile .
 type Profile struct {
-	User        string
+	Uri         sip.Uri
 	DisplayName string
-	Auth        *AuthInfo
-	Expires     uint32
-	InstanceID  string
-	Server      string
+
+	AuthInfo   *AuthInfo
+	Expires    uint32
+	InstanceID string
+
+	Server string
+}
+
+func (p *Profile) Contact() *sip.Address {
+	contact := &sip.Address{
+		Uri:    p.Uri.Clone(),
+		Params: sip.NewParams(),
+	}
+	if p.InstanceID != "nil" {
+		contact.Params.Add("+sip.instance", sip.String{Str: p.InstanceID})
+	}
+
+	//TODO: Add more necessary parameters.
+	//etc: ip:port, transport=udp|tcp, +sip.ice, +sip.instance, +sip.pnsreg,
+
+	return contact
 }
 
 //NewProfile .
 func NewProfile(
-	user string,
+	uri sip.Uri,
 	displayName string,
-	auth *AuthInfo,
+	authInfo *AuthInfo,
 	expires uint32,
 ) *Profile {
 	p := &Profile{
-		User:        user,
+		Uri:         uri,
 		DisplayName: displayName,
-		Auth:        auth,
+		AuthInfo:    authInfo,
 		Expires:     expires,
 	}
 	uid, err := uuid.NewUUID()

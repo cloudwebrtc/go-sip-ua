@@ -13,9 +13,10 @@ const (
 )
 
 type PNParams struct {
-	Provider string
+	Provider string // PNS Provider (apns|fcm|other)
 	Param    string
 	PRID     string
+	PURR     string
 	Expires  uint32 //TODO:
 }
 

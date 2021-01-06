@@ -12,6 +12,7 @@ import (
 	"github.com/cloudwebrtc/go-sip-ua/pkg/util"
 	"github.com/ghettovoice/gosip/log"
 	"github.com/ghettovoice/gosip/sip"
+	"github.com/ghettovoice/gosip/sip/parser"
 	"github.com/ghettovoice/gosip/transport"
 	"github.com/sirupsen/logrus"
 )
@@ -93,17 +94,26 @@ func NewB2BUA(pushCallback registry.PushCallback) *B2BUA {
 		case session.InviteReceived:
 			to, _ := (*req).To()
 			from, _ := (*req).From()
-			aor := to.Address
+			caller := from.Address
+			called := to.Address
 
 			doInvite := func(instance *registry.ContactInstance) {
 				displayName := ""
 				if from.DisplayName != nil {
 					displayName = from.DisplayName.String()
 				}
-				profile := account.NewProfile(from.Address.User().String(), displayName, nil, 0)
-				target := "sip:" + aor.User().String() + "@" + instance.Source + ";transport=" + instance.Transport
+
+				// Create a temporary profile. In the future, it will support reading profiles from files or data
+				// For example: use a specific ip or sip account as outbound trunk
+				profile := account.NewProfile(caller, displayName, nil, 0)
+
+				recipient, err2 := parser.ParseSipUri("sip:" + instance.Source + ";transport=" + instance.Transport)
+				if err2 != nil {
+					logger.Error(err2)
+				}
+
 				offer := sess.RemoteSdp()
-				dest, err := ua.Invite(profile, target, &offer)
+				dest, err := ua.Invite(profile, called, recipient, &offer)
 				if err != nil {
 					logger.Errorf("B-Leg session error: %v", err)
 					return
@@ -112,7 +122,7 @@ func NewB2BUA(pushCallback registry.PushCallback) *B2BUA {
 			}
 
 			// Try to find online contact records.
-			if contacts, found := b.registry.GetContacts(aor); found {
+			if contacts, found := b.registry.GetContacts(called); found {
 				sess.Provisional(100, "Trying")
 				for _, instance := range *contacts {
 					doInvite(instance)
@@ -122,7 +132,7 @@ func NewB2BUA(pushCallback registry.PushCallback) *B2BUA {
 
 			// Pushable: try to find pn-params in contact records.
 			// Try to push the UA and wait for it to wake up.
-			pusher, ok := b.rfc8599.TryPush(aor, from)
+			pusher, ok := b.rfc8599.TryPush(called, from)
 			if ok {
 				sess.Provisional(100, "Trying")
 				instance, err := pusher.WaitContactOnline()
@@ -136,7 +146,7 @@ func NewB2BUA(pushCallback registry.PushCallback) *B2BUA {
 			}
 
 			// Could not found any records
-			sess.Reject(404, fmt.Sprintf("%v Not found", aor))
+			sess.Reject(404, fmt.Sprintf("%v Not found", called))
 			break
 
 		// Handle re-INVITE or UPDATE.
