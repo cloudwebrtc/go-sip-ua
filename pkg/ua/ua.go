@@ -537,6 +537,11 @@ func (ua *UserAgent) RequestWithContext(ctx context.Context, request sip.Request
 							is := v.(*session.Session)
 							is.SetState(session.Confirmed)
 							ua.handleInviteState(is, &request, &response, session.Confirmed, nil)
+						} else if request.Method() == sip.BYE {
+							is := v.(*session.Session)
+							ua.iss.Delete(*callID)
+							is.SetState(session.Terminated)
+							ua.handleInviteState(is, &request, &response, session.Terminated, nil)
 						}
 					}
 				}
