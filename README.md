@@ -7,7 +7,7 @@ SIP UA library for client/b2bua using golang
 - [x] [B2BUA/Client] Websocket over SIP.
 - [x] [Client] Pure Go SIP Client.
 - [ ] [B2BUA] RTP relay (UDP<-->UDP, WebRTC/ICE<->UDP).
-- [x] [B2BUA] Add RFC8599 support.
+- [x] [B2BUA] RFC8599 support, Google FCM/Apple PushKit.
 
 ## Running the examples
 
