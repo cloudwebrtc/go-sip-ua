@@ -18,7 +18,8 @@ import (
 )
 
 type B2BCall struct {
-	src  *session.Session
+	src *session.Session
+	//TODO: Add support for forked calls
 	dest *session.Session
 }
 
@@ -174,6 +175,7 @@ func NewB2BUA(pushCallback registry.PushCallback) *B2BUA {
 
 		// Handle 200OK or ACK
 		case session.Confirmed:
+			//TODO: Add support for forked calls
 			call := b.findCall(sess)
 			if call != nil && call.dest == sess {
 				answer := call.dest.RemoteSdp()
@@ -188,6 +190,7 @@ func NewB2BUA(pushCallback registry.PushCallback) *B2BUA {
 		case session.Canceled:
 			fallthrough
 		case session.Terminated:
+			//TODO: Add support for forked calls
 			call := b.findCall(sess)
 			if call != nil {
 				if call.src == sess {

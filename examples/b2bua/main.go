@@ -51,7 +51,7 @@ func consoleLoop(b2bua *b2bua.B2BUA) {
 		switch t {
 		case "users":
 			fallthrough
-		case "ul":
+		case "ul": /* user list*/
 			accounts := b2bua.GetAccounts()
 			if len(accounts) > 0 {
 				fmt.Printf("Users:\n")
@@ -64,7 +64,7 @@ func consoleLoop(b2bua *b2bua.B2BUA) {
 			}
 		case "calls":
 			fallthrough
-		case "cl":
+		case "cl": /* call list*/
 			calls := b2bua.Calls()
 			if len(calls) > 0 {
 				fmt.Printf("Calls:\n")
@@ -76,28 +76,23 @@ func consoleLoop(b2bua *b2bua.B2BUA) {
 			}
 		case "onlines":
 			fallthrough
-		case "rr":
+		case "rr": /* register records*/
 			aors := b2bua.GetRegistry().GetAllContacts()
 			if len(aors) > 0 {
 				for aor, instances := range aors {
 					fmt.Printf("AOR: %v:\n", aor)
 					for _, instance := range instances {
-						pn := ""
-						//if instance.PNParams != nil {
-						//	pn = fmt.Sprintf("\n\tPN-Params: %v", instance.PNParams.String())
-						//}
-						fmt.Printf("\t%v, Expires: %d, Source: %v, Transport: %v %v\n",
+						fmt.Printf("\t%v, Expires: %d, Source: %v, Transport: %v\n",
 							(*instance).UserAgent,
 							(*instance).RegExpires,
 							(*instance).Source,
-							(*instance).Transport,
-							pn)
+							(*instance).Transport)
 					}
 				}
 			} else {
 				fmt.Printf("No online devices\n")
 			}
-		case "pnr":
+		case "pr": /* pn records*/
 			pnrs := b2bua.GetRFC8599().PNRecords()
 			if len(pnrs) > 0 {
 				fmt.Printf("PN Records:\n")
