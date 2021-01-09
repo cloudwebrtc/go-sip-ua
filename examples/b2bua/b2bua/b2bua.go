@@ -125,7 +125,7 @@ func NewB2BUA() *B2BUA {
 				// For example: use a specific ip or sip account as outbound trunk
 				profile := account.NewProfile(caller, displayName, nil, 0)
 
-				recipient, err2 := parser.ParseSipUri("sip:" + instance.Source + ";transport=" + instance.Transport)
+				recipient, err2 := parser.ParseSipUri("sip:" + called.User().String() + "@" + instance.Source + ";transport=" + instance.Transport)
 				if err2 != nil {
 					logger.Error(err2)
 				}
