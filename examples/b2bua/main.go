@@ -10,11 +10,7 @@ import (
 	"syscall"
 
 	"github.com/c-bata/go-prompt"
-	"github.com/cloudwebrtc/go-sip-ua/pkg/b2bua"
-	"github.com/cloudwebrtc/go-sip-ua/pkg/registry"
-
-	"github.com/cloudwebrtc/go-sip-ua/examples/b2bua/fcm"
-	"github.com/cloudwebrtc/go-sip-ua/examples/b2bua/pushkit"
+	"github.com/cloudwebrtc/go-sip-ua/examples/b2bua/b2bua"
 )
 
 func completer(d prompt.Document) []prompt.Suggest {
@@ -29,7 +25,7 @@ func completer(d prompt.Document) []prompt.Suggest {
 
 func usage() {
 	fmt.Fprintf(os.Stderr, `go pbx version: go-pbx/1.10.0
-Usage: server [-hc]
+Usage: server [-nc]
 
 Options:
 `)
@@ -100,7 +96,7 @@ func consoleLoop(b2bua *b2bua.B2BUA) {
 					fmt.Printf("AOR: %v => pn-provider=%v, pn-param=%v, pn-prid=%v\n", aor, pn.Provider, pn.Param, pn.PRID)
 				}
 			} else {
-				fmt.Printf("No online devices\n")
+				fmt.Printf("No pn records\n")
 			}
 		case "exit":
 			fmt.Println("Exit now.")
@@ -111,10 +107,10 @@ func consoleLoop(b2bua *b2bua.B2BUA) {
 }
 
 func main() {
-	console := false
+	noconsole := false
 	h := false
 	flag.BoolVar(&h, "h", false, "this help")
-	flag.BoolVar(&console, "c", false, "console mode")
+	flag.BoolVar(&noconsole, "nc", false, "no console mode")
 	flag.Usage = usage
 
 	flag.Parse()
@@ -132,20 +128,7 @@ func main() {
 		http.ListenAndServe(":6655", nil)
 	}()
 
-	pushCallback := func(pn *registry.PNParams, payload map[string]string) error {
-		fmt.Printf("Handle Push Request:\nprovider=%v\nparam=%v\nprid=%v\npayload=%v", pn.Provider, pn.Param, pn.PRID, payload)
-		switch pn.Provider {
-		case "apns":
-			pushkit.DoPushKit("./voip-callkeep.p12", pn.PRID, payload)
-			return nil
-		case "fcm":
-			fcm.FCMPush("service-account.json", pn.PRID, payload)
-			return nil
-		}
-		return fmt.Errorf("%v provider not found", pn.Provider)
-	}
-
-	b2bua := b2bua.NewB2BUA(pushCallback)
+	b2bua := b2bua.NewB2BUA()
 
 	// Add sample accounts.
 	b2bua.AddAccount("100", "100")
@@ -153,7 +136,7 @@ func main() {
 	b2bua.AddAccount("300", "300")
 	b2bua.AddAccount("400", "400")
 
-	if console {
+	if !noconsole {
 		consoleLoop(b2bua)
 		return
 	}

@@ -3,9 +3,12 @@ package b2bua
 import (
 	"fmt"
 
+	"github.com/cloudwebrtc/go-sip-ua/examples/b2bua/fcm"
+	"github.com/cloudwebrtc/go-sip-ua/examples/b2bua/pushkit"
+	"github.com/cloudwebrtc/go-sip-ua/examples/b2bua/registry"
+
 	"github.com/cloudwebrtc/go-sip-ua/pkg/account"
 	"github.com/cloudwebrtc/go-sip-ua/pkg/auth"
-	"github.com/cloudwebrtc/go-sip-ua/pkg/registry"
 	"github.com/cloudwebrtc/go-sip-ua/pkg/session"
 	"github.com/cloudwebrtc/go-sip-ua/pkg/stack"
 	"github.com/cloudwebrtc/go-sip-ua/pkg/ua"
@@ -27,8 +30,22 @@ func (b *B2BCall) ToString() string {
 	return b.src.Contact() + " => " + b.dest.Contact()
 }
 
+func pushCallback(pn *registry.PNParams, payload map[string]string) error {
+	fmt.Printf("Handle Push Request:\nprovider=%v\nparam=%v\nprid=%v\npayload=%v", pn.Provider, pn.Param, pn.PRID, payload)
+	switch pn.Provider {
+	case "apns":
+		go pushkit.DoPushKit("./voip-callkeep.p12", pn.PRID, payload)
+		return nil
+	case "fcm":
+		go fcm.FCMPush("service-account.json", pn.PRID, payload)
+		return nil
+	}
+	return fmt.Errorf("%v provider not found", pn.Provider)
+}
+
 // B2BUA .
 type B2BUA struct {
+	stack    *stack.SipStack
 	ua       *ua.UserAgent
 	accounts map[string]string
 	registry registry.Registry
@@ -46,7 +63,7 @@ func init() {
 }
 
 //NewB2BUA .
-func NewB2BUA(pushCallback registry.PushCallback) *B2BUA {
+func NewB2BUA() *B2BUA {
 	b := &B2BUA{
 		registry: registry.Registry(&*registry.NewMemoryRegistry()),
 		accounts: make(map[string]string),
@@ -210,6 +227,7 @@ func NewB2BUA(pushCallback registry.PushCallback) *B2BUA {
 	}
 
 	stack.OnRequest(sip.REGISTER, b.handleRegister)
+	b.stack = stack
 	b.ua = ua
 	return b
 }
@@ -281,6 +299,7 @@ func (b *B2BUA) GetRegistry() registry.Registry {
 	return b.registry
 }
 
+//GetRFC8599 .
 func (b *B2BUA) GetRFC8599() *registry.RFC8599 {
 	return b.rfc8599
 }

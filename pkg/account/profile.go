@@ -26,7 +26,7 @@ type AuthInfo struct {
 
 // Profile .
 type Profile struct {
-	Uri         sip.Uri
+	URI         sip.Uri
 	DisplayName string
 
 	AuthInfo   *AuthInfo
@@ -34,15 +34,21 @@ type Profile struct {
 	InstanceID string
 
 	Server string
+
+	ContactParams map[string]string
 }
 
 func (p *Profile) Contact() *sip.Address {
 	contact := &sip.Address{
-		Uri:    p.Uri.Clone(),
+		Uri:    p.URI.Clone(),
 		Params: sip.NewParams(),
 	}
 	if p.InstanceID != "nil" {
 		contact.Params.Add("+sip.instance", sip.String{Str: p.InstanceID})
+	}
+
+	for key, value := range p.ContactParams {
+		contact.Params.Add(key, sip.String{Str: value})
 	}
 
 	//TODO: Add more necessary parameters.
@@ -59,7 +65,7 @@ func NewProfile(
 	expires uint32,
 ) *Profile {
 	p := &Profile{
-		Uri:         uri,
+		URI:         uri,
 		DisplayName: displayName,
 		AuthInfo:    authInfo,
 		Expires:     expires,

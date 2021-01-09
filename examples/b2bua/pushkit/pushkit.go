@@ -62,6 +62,7 @@ func (p *PushKit) Push(token string, data []byte) error {
 		Certificates: []tls.Certificate{p.cert},
 		ServerName:   p.serverName,
 	}
+
 	conn, err := net.Dial("tcp", p.hostUrl)
 	if err != nil {
 		return errors.New(fmt.Sprintf("error Dial: %s", err.Error()))

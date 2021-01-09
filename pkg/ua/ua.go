@@ -176,12 +176,12 @@ func (ua *UserAgent) handleRegisterState(profile *account.Profile, resp sip.Resp
 func (ua *UserAgent) SendRegister(profile *account.Profile, recipient sip.SipUri, expires uint32) {
 
 	from := &sip.Address{
-		Uri:    profile.Uri,
+		Uri:    profile.URI,
 		Params: sip.NewParams().Add("tag", sip.String{Str: util.RandString(8)}),
 	}
 
 	to := &sip.Address{
-		Uri: profile.Uri,
+		Uri: profile.URI,
 	}
 
 	contact := profile.Contact()
@@ -206,7 +206,7 @@ func (ua *UserAgent) Invite(profile *account.Profile, target sip.Uri, recipient 
 
 	from := &sip.Address{
 		DisplayName: sip.String{Str: profile.DisplayName},
-		Uri:         profile.Uri,
+		Uri:         profile.URI,
 		Params:      sip.NewParams().Add("tag", sip.String{Str: util.RandString(8)}),
 	}
 

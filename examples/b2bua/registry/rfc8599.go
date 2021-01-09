@@ -42,11 +42,12 @@ type RFC8599 struct {
 }
 
 func NewRFC8599(callback PushCallback) *RFC8599 {
-	return &RFC8599{
+	rfc := &RFC8599{
 		PushCallback: callback,
 		records:      make(map[PNParams]sip.Uri),
 		pushers:      make(map[PNParams]*Pusher),
 	}
+	return rfc
 }
 
 func (r *RFC8599) PNRecords() map[PNParams]sip.Uri {
