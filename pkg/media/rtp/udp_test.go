@@ -5,7 +5,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/cloudwebrtc/go-sip-ua/pkg/rtp"
+	"github.com/cloudwebrtc/go-sip-ua/pkg/media/rtp"
+
 	"github.com/ghettovoice/gosip/log"
 	"github.com/sirupsen/logrus"
 	prefixed "github.com/x-cray/logrus-prefixed-formatter"

@@ -7,9 +7,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/cloudwebrtc/go-sip-ua/examples/mock"
 	"github.com/cloudwebrtc/go-sip-ua/pkg/account"
-	"github.com/cloudwebrtc/go-sip-ua/pkg/mock"
-	"github.com/cloudwebrtc/go-sip-ua/pkg/rtp"
+	"github.com/cloudwebrtc/go-sip-ua/pkg/media/rtp"
 	"github.com/cloudwebrtc/go-sip-ua/pkg/session"
 	"github.com/cloudwebrtc/go-sip-ua/pkg/stack"
 	"github.com/cloudwebrtc/go-sip-ua/pkg/ua"
