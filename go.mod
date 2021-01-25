@@ -5,7 +5,6 @@ go 1.13
 require (
 	cloud.google.com/go/firestore v1.4.0 // indirect
 	firebase.google.com/go v3.13.0+incompatible
-	firebase.google.com/go/v4 v4.1.0
 	github.com/c-bata/go-prompt v0.2.5
 	github.com/ghettovoice/gosip v0.0.0-20210125110624-911985a2da41
 	github.com/google/uuid v1.2.0

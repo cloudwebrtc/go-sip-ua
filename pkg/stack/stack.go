@@ -278,19 +278,7 @@ func (s SipStack) GetNetworkInfo(protocol string) *transport.Target {
 	if p, ok := s.listenPorts[network]; ok {
 		target.Port = p
 	} else {
-		defPort := sip.Port(0)
-		switch network {
-		case "UDP":
-			defPort = transport.DefaultWsPort
-		case "TCP":
-			defPort = transport.DefaultTcpPort
-		case "TLS":
-			defPort = transport.DefaultTlsPort
-		case "WS":
-			defPort = transport.DefaultWsPort
-		case "WSS":
-			defPort = transport.DefaultWssPort
-		}
+		defPort := sip.DefaultPort(network)
 		target.Port = &defPort
 	}
 	return &target
