@@ -37,7 +37,7 @@ func init() {
 				Format: []*sdp.Format{
 					{Payload: 8, Name: "PCMA", ClockRate: 8000},
 					{Payload: 18, Name: "G729", ClockRate: 8000, Params: []string{"annexb=yes"}},
-					{Payload: 101, Name: "telephone-event", ClockRate: 8000, Params: []string{"0-16"}},
+					{Payload: 106, Name: "telephone-event", ClockRate: 8000, Params: []string{"0-16"}},
 				},
 			},
 		},
@@ -71,7 +71,7 @@ func BuildLocalSdp(host string, port int) string {
 					{Payload: 0, Name: "PCMU", ClockRate: 8000},
 					{Payload: 8, Name: "PCMA", ClockRate: 8000},
 					//{Payload: 18, Name: "G729", ClockRate: 8000, Params: []string{"annexb=yes"}},
-					{Payload: 101, Name: "telephone-event", ClockRate: 8000, Params: []string{"0-16"}},
+					{Payload: 106, Name: "telephone-event", ClockRate: 8000, Params: []string{"0-16"}},
 				},
 			},
 		},
