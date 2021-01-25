@@ -132,7 +132,12 @@ func NewSipStack(config *SipStackConfig, logger log.Logger) *SipStack {
 	})
 
 	s.tp = transport.NewLayer(ip, dnsResolver, config.MsgMapper, logger.WithPrefix("transport.Layer"))
-	s.tx = transaction.NewLayer(s.tp, logger.WithPrefix("transaction.Layer"))
+
+	sipTp := &sipTransport{
+		tpl: s.tp,
+		s:   s,
+	}
+	s.tx = transaction.NewLayer(sipTp, logger.WithPrefix("transaction.Layer"))
 	go s.serve()
 
 	return s
@@ -403,7 +408,6 @@ func (s *SipStack) Send(msg sip.Message) error {
 
 func (s *SipStack) prepareResponse(res sip.Response) sip.Response {
 	s.appendAutoHeaders(res)
-
 	return res
 }
 
@@ -487,6 +491,12 @@ func (s *SipStack) appendAutoHeaders(msg sip.Message) {
 		userAgent := sip.UserAgentHeader(DefaultUserAgent)
 		msg.AppendHeader(&userAgent)
 	}
+
+	if s.tp.IsStreamed(msg.Transport()) {
+		if hdrs := msg.GetHeaders("Content-Length"); len(hdrs) == 0 {
+			msg.SetBody(msg.Body(), true)
+		}
+	}
 }
 
 func (s *SipStack) getAllowedMethods() []sip.RequestMethod {
@@ -516,4 +526,25 @@ func (s *SipStack) getAllowedMethods() []sip.RequestMethod {
 	s.hmu.RUnlock()
 
 	return methods
+}
+
+type sipTransport struct {
+	tpl transport.Layer
+	s   *SipStack
+}
+
+func (tp *sipTransport) Messages() <-chan sip.Message {
+	return tp.tpl.Messages()
+}
+
+func (tp *sipTransport) Send(msg sip.Message) error {
+	return tp.s.Send(msg)
+}
+
+func (tp *sipTransport) IsReliable(network string) bool {
+	return tp.tpl.IsReliable(network)
+}
+
+func (tp *sipTransport) IsStreamed(network string) bool {
+	return tp.tpl.IsStreamed(network)
 }
