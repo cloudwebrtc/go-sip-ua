@@ -278,7 +278,19 @@ func (s SipStack) GetNetworkInfo(protocol string) *transport.Target {
 	if p, ok := s.listenPorts[network]; ok {
 		target.Port = p
 	} else {
-		defPort := transport.DefaultPort(network)
+		defPort := sip.Port(0)
+		switch network {
+		case "UDP":
+			defPort = transport.DefaultWsPort
+		case "TCP":
+			defPort = transport.DefaultTcpPort
+		case "TLS":
+			defPort = transport.DefaultTlsPort
+		case "WS":
+			defPort = transport.DefaultWsPort
+		case "WSS":
+			defPort = transport.DefaultWssPort
+		}
 		target.Port = &defPort
 	}
 	return &target
@@ -303,7 +315,7 @@ func (s *SipStack) RememberInviteRequest(request sip.Request) {
 }
 
 func (s *SipStack) AckInviteRequest(request sip.Request, response sip.Response) {
-	ackRequest := sip.NewAckRequest("", request, response, log.Fields{
+	ackRequest := sip.NewAckRequest("", request, response, "", log.Fields{
 		"sent_at": time.Now(),
 	})
 	ackRequest.SetSource(request.Source())

@@ -2,13 +2,11 @@ module github.com/cloudwebrtc/go-sip-ua
 
 go 1.13
 
-replace github.com/ghettovoice/gosip v0.0.0-20200807105127-dadd6a686e38 => ../gosip
-
 require (
 	cloud.google.com/go/firestore v1.4.0 // indirect
 	firebase.google.com/go v3.13.0+incompatible
 	github.com/c-bata/go-prompt v0.2.5
-	github.com/ghettovoice/gosip v0.0.0-20210119095122-1ed5d8496e05
+	github.com/ghettovoice/gosip v0.0.0-20210125110624-911985a2da41
 	github.com/google/uuid v1.2.0
 	github.com/kr/pretty v0.2.0 // indirect
 	github.com/mgutz/ansi v0.0.0-20200706080929-d51e80ef957d // indirect
