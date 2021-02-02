@@ -103,7 +103,7 @@ func (ua *UserAgent) buildRequest(
 		return nil, err
 	}
 
-	ua.Log().Debugf("buildRequest %s => %v", method, req)
+	ua.Log().Infof("buildRequest %s => \n%v", method, req)
 	return &req, nil
 }
 
@@ -121,9 +121,6 @@ func (ua *UserAgent) buildViaHopHeader(target sip.SipUri) *sip.ViaHop {
 	}
 
 	port := netinfo.Port
-	if target.Port() != nil {
-		port = target.Port()
-	}
 
 	viaHop := &sip.ViaHop{
 		ProtocolName:    "SIP",
@@ -141,12 +138,22 @@ func (ua *UserAgent) handleRegisterState(profile *account.Profile, resp sip.Resp
 	if err != nil {
 		ua.Log().Errorf("Request [%s] failed, err => %v", sip.REGISTER, err)
 		if ua.RegisterStateHandler != nil {
-			reqErr := err.(*sip.RequestError)
+			var code sip.StatusCode
+			var reason string
+			if _, ok := err.(*sip.RequestError); ok {
+				reqErr := err.(*sip.RequestError)
+				code = sip.StatusCode(reqErr.Code)
+				reason = reqErr.Reason
+			} else {
+				code = 500
+				reason = err.Error()
+			}
+
 			regState := account.RegisterState{
 				Account:    *profile,
 				Response:   nil,
-				StatusCode: sip.StatusCode(reqErr.Code),
-				Reason:     reqErr.Reason,
+				StatusCode: sip.StatusCode(code),
+				Reason:     reason,
 				Expiration: 0,
 			}
 			ua.RegisterStateHandler(regState)
