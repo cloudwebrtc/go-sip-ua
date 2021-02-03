@@ -49,13 +49,13 @@ func main() {
 	profile := account.NewProfile(uri.Clone(), "goSIP",
 		&account.AuthInfo{
 			AuthUser: "100",
-			Password: "blah",
-			Realm:    "foo.bar.baz",
+			Password: "100",
+			Realm:    "b2bua",
 		},
 		1800,
 	)
 
-	recipient, err := parser.ParseSipUri("sip:100@127.0.0.1:5060;transport=udp")
+	recipient, err := parser.ParseSipUri("sip:127.0.0.1:5060;transport=udp")
 	if err != nil {
 		logger.Error(err)
 	}
