@@ -13,10 +13,6 @@ SIP UA library for client/b2bua using golang
 
 ```bash
 git clone https://github.com/cloudwebrtc/go-sip-ua
-
-# Checkout gosip use specific version for TLS/WSS
-git clone https://github.com/cloudwebrtc/gosip -b wss
-
 cd go-sip-ua
 ```
 
