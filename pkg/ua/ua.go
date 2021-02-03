@@ -88,7 +88,7 @@ func (ua *UserAgent) buildRequest(
 	recipient sip.SipUri,
 	callID *sip.CallID) (*sip.Request, error) {
 
-	builder := sip.NewRequestBuilder().SetMethod(method).SetFrom(from).SetTo(to).SetContact(contact).SetRecipient(recipient.Clone()).AddVia(ua.buildViaHopHeader(recipient))
+	builder := sip.NewRequestBuilder().SetMethod(method).SetFrom(from).SetTo(to).SetContact(contact).SetRecipient(recipient.Clone())
 
 	if callID != nil {
 		builder.SetCallID(callID)
