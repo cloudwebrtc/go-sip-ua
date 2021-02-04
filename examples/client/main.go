@@ -106,6 +106,7 @@ func main() {
 			Realm:    "",
 		},
 		1800,
+		stack,
 	)
 
 	recipient, err := parser.ParseSipUri("sip:127.0.0.1:5081;transport=wss")

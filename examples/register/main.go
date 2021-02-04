@@ -41,7 +41,7 @@ func main() {
 		logger.Infof("RegisterStateHandler: user => %s, state => %v, expires => %v, reason => %v", state.Account.AuthInfo.AuthUser, state.StatusCode, state.Expiration, state.Reason)
 	}
 
-	uri, err := parser.ParseUri("sip:100@127.0.0.1:5060")
+	uri, err := parser.ParseUri("sip:100@127.0.0.1") // this acts as an identifier, not connection info
 	if err != nil {
 		logger.Error(err)
 	}
@@ -53,9 +53,10 @@ func main() {
 			Realm:    "b2bua",
 		},
 		1800,
+		stack,
 	)
 
-	recipient, err := parser.ParseSipUri("sip:127.0.0.1:5060;transport=udp")
+	recipient, err := parser.ParseSipUri("sip:127.0.0.1;transport=udp") // this is the remote address
 	if err != nil {
 		logger.Error(err)
 	}

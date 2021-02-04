@@ -3,8 +3,10 @@ package account
 import (
 	"fmt"
 
+	"github.com/cloudwebrtc/go-sip-ua/pkg/stack"
 	"github.com/ghettovoice/gosip/log"
 	"github.com/ghettovoice/gosip/sip"
+	"github.com/ghettovoice/gosip/sip/parser"
 	"github.com/google/uuid"
 )
 
@@ -26,21 +28,27 @@ type AuthInfo struct {
 
 // Profile .
 type Profile struct {
-	URI         sip.Uri
-	DisplayName string
-
-	AuthInfo   *AuthInfo
-	Expires    uint32
-	InstanceID string
-
-	Server string
-
+	URI           sip.Uri
+	DisplayName   string
+	AuthInfo      *AuthInfo
+	Expires       uint32
+	InstanceID    string
+	Server        string
+	ContactURI    sip.Uri
 	ContactParams map[string]string
 }
 
+// Contact .
 func (p *Profile) Contact() *sip.Address {
+	var uri sip.Uri
+	if p.ContactURI != nil {
+		uri = p.ContactURI
+	} else {
+		uri = p.URI.Clone()
+	}
+
 	contact := &sip.Address{
-		Uri:    p.URI.Clone(),
+		Uri:    uri,
 		Params: sip.NewParams(),
 	}
 	if p.InstanceID != "nil" {
@@ -63,6 +71,7 @@ func NewProfile(
 	displayName string,
 	authInfo *AuthInfo,
 	expires uint32,
+	stack *stack.SipStack,
 ) *Profile {
 	p := &Profile{
 		URI:         uri,
@@ -70,6 +79,22 @@ func NewProfile(
 		AuthInfo:    authInfo,
 		Expires:     expires,
 	}
+	if stack != nil { // populate the Contact field
+		var transport string
+		if tp, ok := uri.UriParams().Get("transport"); ok {
+			transport = tp.String()
+		} else {
+			transport = "udp"
+		}
+		addr := stack.GetNetworkInfo(transport)
+		uri, err := parser.ParseUri(fmt.Sprintf("sip:%s@%s;transport=%s", p.URI.User(), addr.Addr(), transport))
+		if err == nil {
+			p.ContactURI = uri
+		} else {
+			logger.Errorf("Error parsing contact URI: %s", err)
+		}
+	}
+
 	uid, err := uuid.NewUUID()
 	if err != nil {
 		logger.Errorf("could not create UUID: %v", err)
