@@ -1,3 +1,6 @@
+# private certs dir
+certs
+
 # Binaries for programs and plugins
 *.exe
 *.exe~
