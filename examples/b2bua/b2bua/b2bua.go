@@ -123,7 +123,7 @@ func NewB2BUA() *B2BUA {
 
 				// Create a temporary profile. In the future, it will support reading profiles from files or data
 				// For example: use a specific ip or sip account as outbound trunk
-				profile := account.NewProfile(caller, displayName, nil, 0)
+				profile := account.NewProfile(caller, displayName, nil, 0, stack)
 
 				recipient, err2 := parser.ParseSipUri("sip:" + called.User().String() + "@" + instance.Source + ";transport=" + instance.Transport)
 				if err2 != nil {
