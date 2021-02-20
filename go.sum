@@ -62,6 +62,8 @@ github.com/fsnotify/fsnotify v1.4.9 h1:hsms1Qyu0jgnwNXIxa+/V/PDsU6CfLf6CNO8H7IWo
 github.com/fsnotify/fsnotify v1.4.9/go.mod h1:znqG4EE+3YCdAaPaxE2ZRY/06pZUdp0tY4IgpuI1SZQ=
 github.com/ghettovoice/gosip v0.0.0-20210203120648-e01089844166 h1:oo3mvsD73P0/nLfZhul3djAK921Ma4gDX4FXQR5yJ7E=
 github.com/ghettovoice/gosip v0.0.0-20210203120648-e01089844166/go.mod h1:yTr3BEYSFe9As6XM7ldyrVgqsPwlnw8Ahc4N28VFM2g=
+github.com/ghettovoice/gosip v0.0.0-20210220085524-cafc4013be1d h1:WyXK6/eezdyMDFjmtCRW3GksfCg/Dykl86uslEwWiFU=
+github.com/ghettovoice/gosip v0.0.0-20210220085524-cafc4013be1d/go.mod h1:yTr3BEYSFe9As6XM7ldyrVgqsPwlnw8Ahc4N28VFM2g=
 github.com/go-gl/glfw v0.0.0-20190409004039-e6da0acd62b1/go.mod h1:vR7hzQXu2zJy9AVAgeJqvqgH9Q5CA+iKCZ2gyEVpxRU=
 github.com/go-gl/glfw/v3.3/glfw v0.0.0-20191125211704-12ad95a8df72/go.mod h1:tQ2UAYgL5IevRw8kRxooKSPJfGvJ9fJQFa0TUsXzTg8=
 github.com/go-gl/glfw/v3.3/glfw v0.0.0-20200222043503-6f7a984d4dc4/go.mod h1:tQ2UAYgL5IevRw8kRxooKSPJfGvJ9fJQFa0TUsXzTg8=
