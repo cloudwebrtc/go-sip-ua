@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/cloudwebrtc/go-sip-ua/pkg/account"
 	"github.com/cloudwebrtc/go-sip-ua/pkg/media/rtp"
@@ -61,7 +62,18 @@ func main() {
 		logger.Error(err)
 	}
 
-	go ua.SendRegister(profile, recipient, profile.Expires)
+	register, err := ua.SendRegister(profile, recipient, profile.Expires)
+	if err != nil {
+		logger.Error(err)
+	}
+
+	time.Sleep(time.Second * 5)
+
+	register.SendRegister(300)
+
+	time.Sleep(time.Second * 5)
+
+	register.SendRegister(0)
 
 	<-stop
 

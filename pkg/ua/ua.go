@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net"
 	"sync"
-	"time"
 
 	"github.com/cloudwebrtc/go-sip-ua/pkg/account"
 	"github.com/cloudwebrtc/go-sip-ua/pkg/auth"
@@ -134,86 +133,14 @@ func (ua *UserAgent) buildViaHopHeader(target sip.SipUri) *sip.ViaHop {
 	return viaHop
 }
 
-func (ua *UserAgent) SendRegister(profile *account.Profile, recipient sip.SipUri, expires uint32) {
-
-	from := &sip.Address{
-		Uri:    profile.URI,
-		Params: sip.NewParams().Add("tag", sip.String{Str: util.RandString(8)}),
-	}
-
-	to := &sip.Address{
-		Uri: profile.URI,
-	}
-
-	contact := profile.Contact()
-
-	request, err := ua.buildRequest(sip.REGISTER, from, to, contact, recipient, nil)
+func (ua *UserAgent) SendRegister(profile *account.Profile, recipient sip.SipUri, expires uint32) (*Register, error) {
+	register := NewRegister(ua, profile, recipient)
+	err := register.SendRegister(expires)
 	if err != nil {
-		ua.Log().Errorf("Register: err = %v", err)
-		return
+		ua.Log().Errorf("SendRegister failed, err => %v", err)
+		return nil, err
 	}
-	expiresHeader := sip.Expires(expires)
-	(*request).AppendHeader(&expiresHeader)
-
-	var authorizer *auth.ClientAuthorizer = nil
-	if profile.AuthInfo != nil {
-		authorizer = auth.NewClientAuthorizer(profile.AuthInfo.AuthUser, profile.AuthInfo.Password)
-	}
-
-	resp, err := ua.RequestWithContext(context.TODO(), *request, authorizer, true)
-
-	if err != nil {
-		ua.Log().Errorf("Request [%s] failed, err => %v", sip.REGISTER, err)
-		if ua.RegisterStateHandler != nil {
-			var code sip.StatusCode
-			var reason string
-			if _, ok := err.(*sip.RequestError); ok {
-				reqErr := err.(*sip.RequestError)
-				code = sip.StatusCode(reqErr.Code)
-				reason = reqErr.Reason
-			} else {
-				code = 500
-				reason = err.Error()
-			}
-
-			regState := account.RegisterState{
-				Account:    *profile,
-				Response:   nil,
-				StatusCode: sip.StatusCode(code),
-				Reason:     reason,
-				Expiration: 0,
-			}
-			ua.RegisterStateHandler(regState)
-		}
-	}
-	if resp != nil {
-		stateCode := resp.StatusCode()
-		ua.Log().Debugf("%s resp %d => %s", sip.REGISTER, stateCode, resp.String())
-		if ua.RegisterStateHandler != nil {
-			var expires uint32 = 0
-			hdrs := resp.GetHeaders("Expires")
-			if len(hdrs) > 0 {
-				expires = uint32(*(hdrs[0]).(*sip.Expires))
-			}
-			regState := account.RegisterState{
-				Account:    *profile,
-				Response:   resp,
-				StatusCode: resp.StatusCode(),
-				Reason:     resp.Reason(),
-				Expiration: expires,
-			}
-
-			if expires > 0 {
-				go func() {
-					timer := time.NewTimer(time.Second * time.Duration(expires-10))
-					<-timer.C
-					ua.SendRegister(profile, recipient, expires)
-				}()
-			}
-
-			ua.RegisterStateHandler(regState)
-		}
-	}
+	return register, nil
 }
 
 func (ua *UserAgent) Invite(profile *account.Profile, target sip.Uri, recipient sip.SipUri, body *string) (*session.Session, error) {
