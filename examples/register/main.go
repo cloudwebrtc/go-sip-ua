@@ -52,7 +52,7 @@ func main() {
 			Password: "100",
 			Realm:    "b2bua",
 		},
-		1800,
+		30,
 		stack,
 	)
 
