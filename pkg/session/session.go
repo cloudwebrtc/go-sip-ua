@@ -310,6 +310,8 @@ func (s *Session) Accept(statusCode sip.StatusCode) {
 	}
 
 	response.AppendHeader(s.localURI.AsContactHeader())
+	response.SetBody(s.answer, true)
+
 	s.response = response
 	tx.Respond(response)
 
@@ -335,6 +337,7 @@ func (s *Session) Provisional(statusCode sip.StatusCode, reason string) {
 		} else {
 			sip.CopyHeaders("Content-Type", request, response)
 		}
+		response.SetBody(s.answer, true)
 	} else {
 		response = sip.NewResponseFromRequest(request.MessageID(), request, statusCode, reason, "")
 	}
