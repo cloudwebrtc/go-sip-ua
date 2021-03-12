@@ -16,7 +16,6 @@ import (
 	"github.com/ghettovoice/gosip/log"
 	"github.com/ghettovoice/gosip/sip"
 	"github.com/ghettovoice/gosip/sip/parser"
-	"github.com/ghettovoice/gosip/transport"
 )
 
 var (
@@ -58,9 +57,7 @@ func main() {
 		logger.Panic(err)
 	}
 
-	tlsOptions := &transport.TLSConfig{Cert: "certs/cert.pem", Key: "certs/key.pem"}
-
-	if err := stack.ListenTLS("wss", "0.0.0.0:5091", tlsOptions); err != nil {
+	if err := stack.ListenTLS("wss", "0.0.0.0:5091", nil); err != nil {
 		logger.Panic(err)
 	}
 
