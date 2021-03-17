@@ -15,6 +15,7 @@ type Register struct {
 	timer     *time.Timer
 	profile   *account.Profile
 	recipient sip.SipUri
+	request   *sip.Request
 	ctx       context.Context
 	cancel    context.CancelFunc
 }
@@ -24,6 +25,7 @@ func NewRegister(ua *UserAgent, profile *account.Profile, recipient sip.SipUri) 
 		ua:        ua,
 		profile:   profile,
 		recipient: recipient,
+		request:   nil,
 	}
 	r.ctx, r.cancel = context.WithCancel(context.Background())
 	return r
@@ -46,20 +48,28 @@ func (r *Register) SendRegister(expires uint32) error {
 
 	contact := profile.Contact()
 
-	request, err := ua.buildRequest(sip.REGISTER, from, to, contact, recipient, nil)
-	if err != nil {
-		ua.Log().Errorf("Register: err = %v", err)
-		return err
+	if r.request == nil {
+		request, err := ua.buildRequest(sip.REGISTER, from, to, contact, recipient, nil)
+		if err != nil {
+			ua.Log().Errorf("Register: err = %v", err)
+			return err
+		}
+		expiresHeader := sip.Expires(expires)
+		(*request).AppendHeader(&expiresHeader)
+		r.request = request
+	} else {
+		if cseq, ok := (*r.request).CSeq(); ok {
+			(*r.request).RemoveHeader("CSeq")
+			(*r.request).AppendHeader(&sip.CSeq{SeqNo: cseq.SeqNo + 1, MethodName: sip.REGISTER})
+		}
 	}
-	expiresHeader := sip.Expires(expires)
-	(*request).AppendHeader(&expiresHeader)
 
 	var authorizer *auth.ClientAuthorizer = nil
 	if profile.AuthInfo != nil {
 		authorizer = auth.NewClientAuthorizer(profile.AuthInfo.AuthUser, profile.AuthInfo.Password)
 	}
 
-	resp, err := ua.RequestWithContext(r.ctx, *request, authorizer, true)
+	resp, err := ua.RequestWithContext(r.ctx, *r.request, authorizer, true)
 
 	if err != nil {
 		ua.Log().Errorf("Request [%s] failed, err => %v", sip.REGISTER, err)
@@ -110,7 +120,7 @@ func (r *Register) SendRegister(expires uint32) error {
 					}
 					select {
 					case <-r.timer.C:
-						r.ua.SendRegister(r.profile, r.recipient, expires)
+						r.SendRegister(expires)
 					case <-r.ctx.Done():
 						return
 					}
