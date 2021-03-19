@@ -79,8 +79,6 @@ func main() {
 			sdp := mock.BuildLocalSdp(udpLaddr.IP.String(), udpLaddr.Port)
 			sess.ProvideAnswer(sdp)
 			sess.Accept(200)
-			break
-
 		case session.Canceled:
 			fallthrough
 		case session.Failure:

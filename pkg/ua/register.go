@@ -60,10 +60,9 @@ func (r *Register) SendRegister(expires uint32) error {
 		(*request).AppendHeader(&expiresHeader)
 		r.request = request
 	} else {
-		if cseq, ok := (*r.request).CSeq(); ok {
-			(*r.request).RemoveHeader("CSeq")
-			(*r.request).AppendHeader(&sip.CSeq{SeqNo: cseq.SeqNo + 1, MethodName: sip.REGISTER})
-		}
+		cseq, _ := (*r.request).CSeq()
+		cseq.SeqNo++
+		cseq.MethodName = sip.REGISTER
 	}
 
 	var authorizer *auth.ClientAuthorizer = nil
