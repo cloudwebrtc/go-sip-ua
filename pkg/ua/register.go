@@ -18,14 +18,16 @@ type Register struct {
 	request   *sip.Request
 	ctx       context.Context
 	cancel    context.CancelFunc
+	data      interface{}
 }
 
-func NewRegister(ua *UserAgent, profile *account.Profile, recipient sip.SipUri) *Register {
+func NewRegister(ua *UserAgent, profile *account.Profile, recipient sip.SipUri, data interface{}) *Register {
 	r := &Register{
 		ua:        ua,
 		profile:   profile,
 		recipient: recipient,
 		request:   nil,
+		data:      data,
 	}
 	r.ctx, r.cancel = context.WithCancel(context.Background())
 	return r
@@ -85,14 +87,15 @@ func (r *Register) SendRegister(expires uint32) error {
 				reason = err.Error()
 			}
 
-			regState := account.RegisterState{
-				Account:    *profile,
+			state := account.RegisterState{
+				Account:    profile,
 				Response:   nil,
 				StatusCode: sip.StatusCode(code),
 				Reason:     reason,
 				Expiration: 0,
+				UserData:   r.data,
 			}
-			ua.RegisterStateHandler(regState)
+			ua.RegisterStateHandler(state)
 		}
 	}
 	if resp != nil {
@@ -104,12 +107,13 @@ func (r *Register) SendRegister(expires uint32) error {
 			if len(hdrs) > 0 {
 				expires = uint32(*(hdrs[0]).(*sip.Expires))
 			}
-			regState := account.RegisterState{
-				Account:    *profile,
+			state := account.RegisterState{
+				Account:    profile,
 				Response:   resp,
 				StatusCode: resp.StatusCode(),
 				Reason:     resp.Reason(),
 				Expiration: expires,
+				UserData:   r.data,
 			}
 			if expires > 0 {
 				go func() {
@@ -131,7 +135,7 @@ func (r *Register) SendRegister(expires uint32) error {
 					r.timer = nil
 				}
 			}
-			ua.RegisterStateHandler(regState)
+			ua.RegisterStateHandler(state)
 		}
 	}
 

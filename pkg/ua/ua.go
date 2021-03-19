@@ -21,7 +21,6 @@ import (
 type UserAgentConfig struct {
 	UserAgent string
 	SipStack  *stack.SipStack
-	log       log.Logger
 }
 
 //InviteSessionHandler .
@@ -133,8 +132,8 @@ func (ua *UserAgent) buildViaHopHeader(target sip.SipUri) *sip.ViaHop {
 	return viaHop
 }
 
-func (ua *UserAgent) SendRegister(profile *account.Profile, recipient sip.SipUri, expires uint32) (*Register, error) {
-	register := NewRegister(ua, profile, recipient)
+func (ua *UserAgent) SendRegister(profile *account.Profile, recipient sip.SipUri, expires uint32, userdata interface{}) (*Register, error) {
+	register := NewRegister(ua, profile, recipient, userdata)
 	err := register.SendRegister(expires)
 	if err != nil {
 		ua.Log().Errorf("SendRegister failed, err => %v", err)

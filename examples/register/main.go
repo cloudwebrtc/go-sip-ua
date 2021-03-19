@@ -62,7 +62,7 @@ func main() {
 		logger.Error(err)
 	}
 
-	register, err := ua.SendRegister(profile, recipient, profile.Expires)
+	register, err := ua.SendRegister(profile, recipient, profile.Expires, nil)
 	if err != nil {
 		logger.Error(err)
 	}

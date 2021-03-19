@@ -105,9 +105,10 @@ func NewProfile(
 
 //RegisterState .
 type RegisterState struct {
-	Account    Profile
+	Account    *Profile
 	StatusCode sip.StatusCode
 	Reason     string
 	Expiration uint32
 	Response   sip.Response
+	UserData   interface{}
 }
