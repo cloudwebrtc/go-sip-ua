@@ -63,6 +63,11 @@ func (r *Register) SendRegister(expires uint32) error {
 		cseq, _ := (*r.request).CSeq()
 		cseq.SeqNo++
 		cseq.MethodName = sip.REGISTER
+
+		(*r.request).RemoveHeader("Expires")
+		// replace Expires header.
+		expiresHeader := sip.Expires(expires)
+		(*r.request).AppendHeader(&expiresHeader)
 	}
 
 	var authorizer *auth.ClientAuthorizer = nil
