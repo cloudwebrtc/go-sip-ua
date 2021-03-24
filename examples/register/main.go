@@ -69,6 +69,10 @@ func main() {
 
 	time.Sleep(time.Second * 5)
 
+	register.SendRegister(0)
+
+	time.Sleep(time.Second * 5)
+
 	register.SendRegister(300)
 
 	time.Sleep(time.Second * 5)

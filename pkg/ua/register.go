@@ -11,14 +11,15 @@ import (
 )
 
 type Register struct {
-	ua        *UserAgent
-	timer     *time.Timer
-	profile   *account.Profile
-	recipient sip.SipUri
-	request   *sip.Request
-	ctx       context.Context
-	cancel    context.CancelFunc
-	data      interface{}
+	ua         *UserAgent
+	timer      *time.Timer
+	profile    *account.Profile
+	authorizer *auth.ClientAuthorizer
+	recipient  sip.SipUri
+	request    *sip.Request
+	ctx        context.Context
+	cancel     context.CancelFunc
+	data       interface{}
 }
 
 func NewRegister(ua *UserAgent, profile *account.Profile, recipient sip.SipUri, data interface{}) *Register {
@@ -70,12 +71,11 @@ func (r *Register) SendRegister(expires uint32) error {
 		(*r.request).AppendHeader(&expiresHeader)
 	}
 
-	var authorizer *auth.ClientAuthorizer = nil
-	if profile.AuthInfo != nil {
-		authorizer = auth.NewClientAuthorizer(profile.AuthInfo.AuthUser, profile.AuthInfo.Password)
+	if profile.AuthInfo != nil && r.authorizer == nil {
+		r.authorizer = auth.NewClientAuthorizer(profile.AuthInfo.AuthUser, profile.AuthInfo.Password)
 	}
 
-	resp, err := ua.RequestWithContext(r.ctx, *r.request, authorizer, true)
+	resp, err := ua.RequestWithContext(r.ctx, *r.request, r.authorizer, true)
 
 	if err != nil {
 		ua.Log().Errorf("Request [%s] failed, err => %v", sip.REGISTER, err)
@@ -138,7 +138,7 @@ func (r *Register) SendRegister(expires uint32) error {
 					r.timer.Stop()
 					r.timer = nil
 				}
-				r.cancel()
+				r.request = nil
 			}
 			ua.RegisterStateHandler(state)
 		}

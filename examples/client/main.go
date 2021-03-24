@@ -112,7 +112,7 @@ func main() {
 		logger.Error(err)
 	}
 
-	go ua.SendRegister(profile, recipient, profile.Expires, nil)
+	register, _ := ua.SendRegister(profile, recipient, profile.Expires, nil)
 	time.Sleep(time.Second * 3)
 
 	udp = createUdp()
@@ -126,10 +126,9 @@ func main() {
 
 	go ua.Invite(profile, called, recipient, &sdp)
 
-	time.Sleep(time.Second * 3)
-	go ua.SendRegister(profile, recipient, 0, nil)
-
 	<-stop
+
+	register.SendRegister(0)
 
 	ua.Shutdown()
 }
