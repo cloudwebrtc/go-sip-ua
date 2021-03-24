@@ -28,7 +28,6 @@ type Session struct {
 	localURI       sip.Address
 	remoteURI      sip.Address
 	remoteTarget   sip.Uri
-	userData       *interface{}
 	logger         log.Logger
 }
 
@@ -195,10 +194,6 @@ func (s *Session) Status() Status {
 
 func (s *Session) Direction() Direction {
 	return s.direction
-}
-
-func (s *Session) GetUserData() interface{} {
-	return s.userData
 }
 
 // GetEarlyMedia Get sdp for early media.
