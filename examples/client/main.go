@@ -76,8 +76,6 @@ func main() {
 			sdp := mock.BuildLocalSdp(udpLaddr.IP.String(), udpLaddr.Port)
 			sess.ProvideAnswer(sdp)
 			sess.Accept(200)
-			break
-
 		case session.Canceled:
 			fallthrough
 		case session.Failure:
@@ -111,7 +109,7 @@ func main() {
 		logger.Error(err)
 	}
 
-	go ua.SendRegister(profile, recipient, profile.Expires)
+	register, _ := ua.SendRegister(profile, recipient, profile.Expires, nil)
 	time.Sleep(time.Second * 3)
 
 	udp = createUdp()
@@ -125,10 +123,9 @@ func main() {
 
 	go ua.Invite(profile, called, recipient, &sdp)
 
-	time.Sleep(time.Second * 3)
-	go ua.SendRegister(profile, recipient, 0)
-
 	<-stop
+
+	register.SendRegister(0)
 
 	ua.Shutdown()
 }

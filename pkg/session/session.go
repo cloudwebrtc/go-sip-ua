@@ -3,6 +3,7 @@ package session
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/ghettovoice/gosip/log"
 	"github.com/ghettovoice/gosip/sip"
@@ -12,6 +13,7 @@ import (
 type RequestCallback func(ctx context.Context, request sip.Request, authorizer sip.Authorizer, waitForResult bool) (sip.Response, error)
 
 type Session struct {
+	lock           sync.Mutex
 	requestCallbck RequestCallback
 	status         Status
 	callID         sip.CallID
@@ -26,7 +28,6 @@ type Session struct {
 	localURI       sip.Address
 	remoteURI      sip.Address
 	remoteTarget   sip.Uri
-	userData       *interface{}
 	logger         log.Logger
 }
 
@@ -180,10 +181,14 @@ func (s *Session) StoreTransaction(tx sip.Transaction) {
 }
 
 func (s *Session) SetState(status Status) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
 	s.status = status
 }
 
 func (s *Session) Status() Status {
+	s.lock.Lock()
+	defer s.lock.Unlock()
 	return s.status
 }
 
@@ -251,7 +256,7 @@ func (s *Session) Reject(statusCode sip.StatusCode, reason string) {
 func (s *Session) End() error {
 
 	if s.status == Terminated {
-		err := fmt.Errorf("Invalid status: %v", s.status)
+		err := fmt.Errorf("invalid status: %v", s.status)
 		s.Log().Errorf("Session::End() %v", err)
 		return err
 	}
