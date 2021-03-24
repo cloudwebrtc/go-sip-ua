@@ -14,6 +14,6 @@ require (
 	github.com/sirupsen/logrus v1.7.0
 	github.com/x-cray/logrus-prefixed-formatter v0.5.2
 	golang.org/x/crypto v0.0.0-20201221181555-eec23a3978ad
-	google.golang.org/api v0.36.0
+	google.golang.org/api v0.42.0
 	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 // indirect
 )
