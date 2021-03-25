@@ -5,7 +5,7 @@ SIP UA library for client/b2bua using golang
 ## Features
 
 - [x] Transports UDP/TCP/TLS/WS/WSS.
-- [x] simple pure Go SIP Client.
+- [x] Simple pure Go SIP Client.
 - [x] Simple pure Go B2BUA, support RFC8599, Google FCM/Apple PushKit.
 - [ ] RTP relay (UDP<-->UDP, WebRTC/ICE<->UDP)
 - [ ] WebRTC2SIP Gateway.
