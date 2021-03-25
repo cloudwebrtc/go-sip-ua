@@ -53,7 +53,7 @@ func main() {
 			Password: "100",
 			Realm:    "b2bua",
 		},
-		30,
+		1800,
 		stack,
 	)
 
@@ -62,10 +62,14 @@ func main() {
 		logger.Error(err)
 	}
 
-	register, err := ua.SendRegister(profile, recipient, profile.Expires)
+	register, err := ua.SendRegister(profile, recipient, profile.Expires, nil)
 	if err != nil {
 		logger.Error(err)
 	}
+
+	time.Sleep(time.Second * 5)
+
+	register.SendRegister(0)
 
 	time.Sleep(time.Second * 5)
 

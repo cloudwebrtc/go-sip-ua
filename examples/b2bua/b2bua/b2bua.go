@@ -165,7 +165,6 @@ func NewB2BUA() *B2BUA {
 
 			// Could not found any records
 			sess.Reject(404, fmt.Sprintf("%v Not found", called))
-			break
 
 		// Handle re-INVITE or UPDATE.
 		case session.ReInviteReceived:
@@ -176,7 +175,6 @@ func NewB2BUA() *B2BUA {
 			case session.Outgoing:
 				//TODO: Need to provide correct answer.
 			}
-			break
 
 		// Handle 1XX
 		case session.EarlyMedia:
@@ -188,7 +186,6 @@ func NewB2BUA() *B2BUA {
 				call.src.ProvideAnswer(answer)
 				call.src.Provisional((*resp).StatusCode(), (*resp).Reason())
 			}
-			break
 
 		// Handle 200OK or ACK
 		case session.Confirmed:
@@ -199,7 +196,6 @@ func NewB2BUA() *B2BUA {
 				call.src.ProvideAnswer(answer)
 				call.src.Accept(200)
 			}
-			break
 
 		// Handle 4XX+
 		case session.Failure:
@@ -217,7 +213,6 @@ func NewB2BUA() *B2BUA {
 				}
 			}
 			b.removeCall(sess)
-			break
 
 		}
 	}
@@ -339,7 +334,6 @@ func (b *B2BUA) handleRegister(request sip.Request, tx sip.ServerTransaction) {
 	resp := sip.NewResponseFromRequest(request.MessageID(), request, 200, reason, "")
 	sip.CopyHeaders("Expires", request, resp)
 	util.BuildContactHeader("Contact", request, resp, &expires)
-	sip.CopyHeaders("Content-Length", request, resp)
 	tx.Respond(resp)
 
 }

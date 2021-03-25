@@ -11,19 +11,24 @@ import (
 )
 
 type Register struct {
-	ua        *UserAgent
-	timer     *time.Timer
-	profile   *account.Profile
-	recipient sip.SipUri
-	ctx       context.Context
-	cancel    context.CancelFunc
+	ua         *UserAgent
+	timer      *time.Timer
+	profile    *account.Profile
+	authorizer *auth.ClientAuthorizer
+	recipient  sip.SipUri
+	request    *sip.Request
+	ctx        context.Context
+	cancel     context.CancelFunc
+	data       interface{}
 }
 
-func NewRegister(ua *UserAgent, profile *account.Profile, recipient sip.SipUri) *Register {
+func NewRegister(ua *UserAgent, profile *account.Profile, recipient sip.SipUri, data interface{}) *Register {
 	r := &Register{
 		ua:        ua,
 		profile:   profile,
 		recipient: recipient,
+		request:   nil,
+		data:      data,
 	}
 	r.ctx, r.cancel = context.WithCancel(context.Background())
 	return r
@@ -46,20 +51,31 @@ func (r *Register) SendRegister(expires uint32) error {
 
 	contact := profile.Contact()
 
-	request, err := ua.buildRequest(sip.REGISTER, from, to, contact, recipient, nil)
-	if err != nil {
-		ua.Log().Errorf("Register: err = %v", err)
-		return err
-	}
-	expiresHeader := sip.Expires(expires)
-	(*request).AppendHeader(&expiresHeader)
+	if r.request == nil || expires == 0 {
+		request, err := ua.buildRequest(sip.REGISTER, from, to, contact, recipient, nil)
+		if err != nil {
+			ua.Log().Errorf("Register: err = %v", err)
+			return err
+		}
+		expiresHeader := sip.Expires(expires)
+		(*request).AppendHeader(&expiresHeader)
+		r.request = request
+	} else {
+		cseq, _ := (*r.request).CSeq()
+		cseq.SeqNo++
+		cseq.MethodName = sip.REGISTER
 
-	var authorizer *auth.ClientAuthorizer = nil
-	if profile.AuthInfo != nil {
-		authorizer = auth.NewClientAuthorizer(profile.AuthInfo.AuthUser, profile.AuthInfo.Password)
+		(*r.request).RemoveHeader("Expires")
+		// replace Expires header.
+		expiresHeader := sip.Expires(expires)
+		(*r.request).AppendHeader(&expiresHeader)
 	}
 
-	resp, err := ua.RequestWithContext(r.ctx, *request, authorizer, true)
+	if profile.AuthInfo != nil && r.authorizer == nil {
+		r.authorizer = auth.NewClientAuthorizer(profile.AuthInfo.AuthUser, profile.AuthInfo.Password)
+	}
+
+	resp, err := ua.RequestWithContext(r.ctx, *r.request, r.authorizer, true)
 
 	if err != nil {
 		ua.Log().Errorf("Request [%s] failed, err => %v", sip.REGISTER, err)
@@ -75,14 +91,15 @@ func (r *Register) SendRegister(expires uint32) error {
 				reason = err.Error()
 			}
 
-			regState := account.RegisterState{
-				Account:    *profile,
+			state := account.RegisterState{
+				Account:    profile,
 				Response:   nil,
 				StatusCode: sip.StatusCode(code),
 				Reason:     reason,
 				Expiration: 0,
+				UserData:   r.data,
 			}
-			ua.RegisterStateHandler(regState)
+			ua.RegisterStateHandler(state)
 		}
 	}
 	if resp != nil {
@@ -94,12 +111,13 @@ func (r *Register) SendRegister(expires uint32) error {
 			if len(hdrs) > 0 {
 				expires = uint32(*(hdrs[0]).(*sip.Expires))
 			}
-			regState := account.RegisterState{
-				Account:    *profile,
+			state := account.RegisterState{
+				Account:    profile,
 				Response:   resp,
 				StatusCode: resp.StatusCode(),
 				Reason:     resp.Reason(),
 				Expiration: expires,
+				UserData:   r.data,
 			}
 			if expires > 0 {
 				go func() {
@@ -110,7 +128,7 @@ func (r *Register) SendRegister(expires uint32) error {
 					}
 					select {
 					case <-r.timer.C:
-						r.ua.SendRegister(r.profile, r.recipient, expires)
+						r.SendRegister(expires)
 					case <-r.ctx.Done():
 						return
 					}
@@ -120,8 +138,9 @@ func (r *Register) SendRegister(expires uint32) error {
 					r.timer.Stop()
 					r.timer = nil
 				}
+				r.request = nil
 			}
-			ua.RegisterStateHandler(regState)
+			ua.RegisterStateHandler(state)
 		}
 	}
 

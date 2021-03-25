@@ -16,7 +16,6 @@ import (
 	"github.com/ghettovoice/gosip/log"
 	"github.com/ghettovoice/gosip/sip"
 	"github.com/ghettovoice/gosip/sip/parser"
-	"github.com/ghettovoice/gosip/transport"
 )
 
 var (
@@ -58,9 +57,7 @@ func main() {
 		logger.Panic(err)
 	}
 
-	tlsOptions := &transport.TLSConfig{Cert: "certs/cert.pem", Key: "certs/key.pem"}
-
-	if err := stack.ListenTLS("wss", "0.0.0.0:5091", tlsOptions); err != nil {
+	if err := stack.ListenTLS("wss", "0.0.0.0:5091", nil); err != nil {
 		logger.Panic(err)
 	}
 
@@ -79,8 +76,6 @@ func main() {
 			sdp := mock.BuildLocalSdp(udpLaddr.IP.String(), udpLaddr.Port)
 			sess.ProvideAnswer(sdp)
 			sess.Accept(200)
-			break
-
 		case session.Canceled:
 			fallthrough
 		case session.Failure:
@@ -114,7 +109,7 @@ func main() {
 		logger.Error(err)
 	}
 
-	go ua.SendRegister(profile, recipient, profile.Expires)
+	register, _ := ua.SendRegister(profile, recipient, profile.Expires, nil)
 	time.Sleep(time.Second * 3)
 
 	udp = createUdp()
@@ -128,10 +123,9 @@ func main() {
 
 	go ua.Invite(profile, called, recipient, &sdp)
 
-	time.Sleep(time.Second * 3)
-	go ua.SendRegister(profile, recipient, 0)
-
 	<-stop
+
+	register.SendRegister(0)
 
 	ua.Shutdown()
 }
