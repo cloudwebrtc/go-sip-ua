@@ -57,7 +57,7 @@ func main() {
 		stack,
 	)
 
-	recipient, err := parser.ParseSipUri("sip:127.0.0.1;transport=udp") // this is the remote address
+	recipient, err := parser.ParseSipUri("sip:100@127.0.0.1;transport=udp") // this is the remote address
 	if err != nil {
 		logger.Error(err)
 	}

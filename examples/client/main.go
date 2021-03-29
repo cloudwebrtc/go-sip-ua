@@ -104,7 +104,7 @@ func main() {
 		stack,
 	)
 
-	recipient, err := parser.ParseSipUri("sip:127.0.0.1:5081;transport=wss")
+	recipient, err := parser.ParseSipUri("sip:100@127.0.0.1:5060;transport=udp")
 	if err != nil {
 		logger.Error(err)
 	}
@@ -121,6 +121,10 @@ func main() {
 		logger.Error(err)
 	}
 
+	recipient, err = parser.ParseSipUri("sip:400@127.0.0.1:5060;transport=udp")
+	if err != nil {
+		logger.Error(err)
+	}
 	go ua.Invite(profile, called, recipient, &sdp)
 
 	<-stop
