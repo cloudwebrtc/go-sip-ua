@@ -352,7 +352,7 @@ func (s *Session) Provisional(statusCode sip.StatusCode, reason string) {
 }
 
 func (s *Session) makeRequest(uaType string, method sip.RequestMethod, msgID sip.MessageID, inviteRequest sip.Request, inviteResponse sip.Response) sip.Request {
-	byeRequest := sip.NewRequest(
+	newRequest := sip.NewRequest(
 		msgID,
 		method,
 		s.remoteTarget,
@@ -366,31 +366,32 @@ func (s *Session) makeRequest(uaType string, method sip.RequestMethod, msgID sip
 	)
 
 	from := s.localURI.Clone().AsFromHeader()
-	byeRequest.AppendHeader(from)
+	newRequest.AppendHeader(from)
 	to := s.remoteURI.Clone().AsToHeader()
-	byeRequest.AppendHeader(to)
+	newRequest.AppendHeader(to)
+	newRequest.SetRecipient(s.request.Recipient())
 
 	if uaType == "UAC" {
-		sip.CopyHeaders("Via", inviteRequest, byeRequest)
+		sip.CopyHeaders("Via", inviteRequest, newRequest)
 		if len(inviteRequest.GetHeaders("Route")) > 0 {
-			sip.CopyHeaders("Route", inviteRequest, byeRequest)
+			sip.CopyHeaders("Route", inviteRequest, newRequest)
 		}
 	} else if uaType == "UAS" {
-		sip.CopyHeaders("Via", inviteRequest, byeRequest)
+		sip.CopyHeaders("Via", inviteRequest, newRequest)
 		if len(inviteResponse.GetHeaders("Route")) > 0 {
-			sip.CopyHeaders("Route", inviteResponse, byeRequest)
+			sip.CopyHeaders("Route", inviteResponse, newRequest)
 		}
-		byeRequest.SetDestination(inviteResponse.Destination())
-		byeRequest.SetSource(inviteResponse.Source())
+		newRequest.SetDestination(inviteResponse.Destination())
+		newRequest.SetSource(inviteResponse.Source())
 	}
 
 	maxForwardsHeader := sip.MaxForwards(70)
-	byeRequest.AppendHeader(&maxForwardsHeader)
-	sip.CopyHeaders("Call-ID", inviteRequest, byeRequest)
-	sip.CopyHeaders("CSeq", inviteRequest, byeRequest)
-	cseq, _ := byeRequest.CSeq()
+	newRequest.AppendHeader(&maxForwardsHeader)
+	sip.CopyHeaders("Call-ID", inviteRequest, newRequest)
+	sip.CopyHeaders("CSeq", inviteRequest, newRequest)
+	cseq, _ := newRequest.CSeq()
 	cseq.SeqNo++
 	cseq.MethodName = method
 
-	return byeRequest
+	return newRequest
 }

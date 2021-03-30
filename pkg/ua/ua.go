@@ -19,8 +19,7 @@ import (
 
 // UserAgentConfig .
 type UserAgentConfig struct {
-	UserAgent string
-	SipStack  *stack.SipStack
+	SipStack *stack.SipStack
 }
 
 //InviteSessionHandler .
@@ -93,16 +92,13 @@ func (ua *UserAgent) buildRequest(
 		builder.SetCallID(callID)
 	}
 
-	userAgent := sip.UserAgentHeader(ua.config.UserAgent)
-	builder.SetUserAgent(&userAgent)
-
 	req, err := builder.Build()
 	if err != nil {
 		ua.Log().Errorf("err => %v", err)
 		return nil, err
 	}
 
-	ua.Log().Infof("buildRequest %s => \n%v", method, req)
+	//ua.Log().Infof("buildRequest %s => \n%v", method, req)
 	return &req, nil
 }
 

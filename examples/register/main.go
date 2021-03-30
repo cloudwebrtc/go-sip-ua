@@ -27,15 +27,17 @@ func main() {
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGTERM, syscall.SIGINT)
-	stack := stack.NewSipStack(&stack.SipStackConfig{Extensions: []string{"replaces", "outbound"}, Dns: "8.8.8.8"}, logger)
+	stack := stack.NewSipStack(&stack.SipStackConfig{
+		UserAgent:  "Go Sip Client/example-register",
+		Extensions: []string{"replaces", "outbound"},
+		Dns:        "8.8.8.8"}, logger)
 
 	if err := stack.Listen("udp", "0.0.0.0:5066"); err != nil {
 		logger.Panic(err)
 	}
 
 	ua := ua.NewUserAgent(&ua.UserAgentConfig{
-		UserAgent: "Go Sip Client/1.0.0",
-		SipStack:  stack,
+		SipStack: stack,
 	}, logger)
 
 	ua.RegisterStateHandler = func(state account.RegisterState) {

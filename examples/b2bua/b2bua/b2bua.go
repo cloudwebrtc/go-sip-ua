@@ -71,6 +71,7 @@ func NewB2BUA() *B2BUA {
 	}
 
 	stack := stack.NewSipStack(&stack.SipStackConfig{
+		UserAgent:  "Go B2BUA/1.0.0",
 		Extensions: []string{"replaces", "outbound"},
 		Dns:        "8.8.8.8",
 		ServerAuthManager: stack.ServerAuthManager{
@@ -100,8 +101,8 @@ func NewB2BUA() *B2BUA {
 	}
 
 	ua := ua.NewUserAgent(&ua.UserAgentConfig{
-		UserAgent: "Go B2BUA/1.0.0",
-		SipStack:  stack,
+
+		SipStack: stack,
 	}, logger)
 
 	ua.InviteStateHandler = func(sess *session.Session, req *sip.Request, resp *sip.Response, state session.Status) {

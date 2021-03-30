@@ -46,10 +46,12 @@ type SipStackConfig struct {
 	Extensions        []string
 	MsgMapper         sip.MessageMapper
 	ServerAuthManager ServerAuthManager
+	UserAgent         string
 }
 
 // SipStack a golang SIP Stack
 type SipStack struct {
+	config                *SipStackConfig
 	listenPorts           map[string]*sip.Port
 	tp                    transport.Layer
 	tx                    transaction.Layer
@@ -112,6 +114,7 @@ func NewSipStack(config *SipStackConfig, logger log.Logger) *SipStack {
 	}
 
 	s := &SipStack{
+		config:          config,
 		listenPorts:     make(map[string]*sip.Port),
 		host:            host,
 		ip:              ip,
@@ -241,6 +244,21 @@ func (s *SipStack) handleRequest(req sip.Request, tx sip.ServerTransaction) {
 	if !ok {
 		logger.Warnf("SIP request %v handler not found", req.Method())
 
+		go func(tx sip.ServerTransaction, logger log.Logger) {
+			for {
+				select {
+				case <-s.tx.Done():
+					return
+				case err, ok := <-tx.Errors():
+					if !ok {
+						return
+					}
+
+					logger.Warnf("error from SIP server transaction %s: %s", tx, err)
+				}
+			}
+		}(tx, logger)
+
 		res := sip.NewResponseFromRequest("", req, 405, "Method Not Allowed", "")
 		if _, err := s.Respond(res); err != nil {
 			logger.Errorf("respond '405 Method Not Allowed' failed: %s", err)
@@ -252,7 +270,7 @@ func (s *SipStack) handleRequest(req sip.Request, tx sip.ServerTransaction) {
 	if s.authenticator != nil {
 		authenticator := s.authenticator.Authenticator
 		requiresChallenge := s.authenticator.RequiresChallenge
-		if requiresChallenge(req) == true {
+		if requiresChallenge(req) {
 			go func() {
 				if _, ok := authenticator.Authenticate(req, tx); ok {
 					handler(req, tx)
@@ -493,8 +511,16 @@ func (s *SipStack) appendAutoHeaders(msg sip.Message) {
 	}
 
 	if hdrs := msg.GetHeaders("User-Agent"); len(hdrs) == 0 {
-		userAgent := sip.UserAgentHeader(DefaultUserAgent)
-		msg.AppendHeader(&userAgent)
+		userAgent := DefaultUserAgent
+		if len(s.config.UserAgent) > 0 {
+			userAgent = s.config.UserAgent
+		}
+		userAgentHeader := sip.UserAgentHeader(userAgent)
+		msg.AppendHeader(&userAgentHeader)
+	} else if len(s.config.UserAgent) > 0 {
+		msg.RemoveHeader("User-Agent")
+		userAgentHeader := sip.UserAgentHeader(s.config.UserAgent)
+		msg.AppendHeader(&userAgentHeader)
 	}
 
 	if s.tp.IsStreamed(msg.Transport()) {

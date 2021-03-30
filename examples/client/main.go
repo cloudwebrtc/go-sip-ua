@@ -44,7 +44,10 @@ func createUdp() *rtp.RtpUDPStream {
 func main() {
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGTERM, syscall.SIGINT)
-	stack := stack.NewSipStack(&stack.SipStackConfig{Extensions: []string{"replaces", "outbound"}, Dns: "8.8.8.8"}, logger)
+	stack := stack.NewSipStack(&stack.SipStackConfig{
+		UserAgent:  "Go Sip Client/example-client",
+		Extensions: []string{"replaces", "outbound"},
+		Dns:        "8.8.8.8"}, logger)
 
 	listen := "0.0.0.0:5080"
 	logger.Infof("Listen => %s", listen)
@@ -62,8 +65,7 @@ func main() {
 	}
 
 	ua := ua.NewUserAgent(&ua.UserAgentConfig{
-		UserAgent: "Go Sip Client/1.0.0",
-		SipStack:  stack,
+		SipStack: stack,
 	}, logger)
 
 	ua.InviteStateHandler = func(sess *session.Session, req *sip.Request, resp *sip.Response, state session.Status) {
@@ -94,7 +96,7 @@ func main() {
 		logger.Error(err)
 	}
 
-	profile := account.NewProfile(uri.Clone(), "goSIP",
+	profile := account.NewProfile(uri.Clone(), "goSIP/example-client",
 		&account.AuthInfo{
 			AuthUser: "100",
 			Password: "100",
@@ -104,7 +106,7 @@ func main() {
 		stack,
 	)
 
-	recipient, err := parser.ParseSipUri("sip:100@127.0.0.1:5060;transport=udp")
+	recipient, err := parser.ParseSipUri("sip:100@127.0.0.1:5081;transport=wss")
 	if err != nil {
 		logger.Error(err)
 	}
@@ -121,10 +123,11 @@ func main() {
 		logger.Error(err)
 	}
 
-	recipient, err = parser.ParseSipUri("sip:400@127.0.0.1:5060;transport=udp")
+	recipient, err = parser.ParseSipUri("sip:400@127.0.0.1:5081;transport=wss")
 	if err != nil {
 		logger.Error(err)
 	}
+
 	go ua.Invite(profile, called, recipient, &sdp)
 
 	<-stop
