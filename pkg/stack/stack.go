@@ -334,8 +334,7 @@ func (s *SipStack) AckInviteRequest(request sip.Request, response sip.Response) 
 	ackRequest := sip.NewAckRequest("", request, response, "", log.Fields{
 		"sent_at": time.Now(),
 	})
-	ackRequest.SetSource(request.Source())
-	ackRequest.SetDestination(request.Destination())
+	ackRequest.SetRecipient(request.Recipient())
 	if err := s.Send(ackRequest); err != nil {
 		s.Log().WithFields(map[string]interface{}{
 			"invite_request":  request.Short(),
@@ -349,6 +348,7 @@ func (s *SipStack) CancelRequest(request sip.Request, response sip.Response) {
 	cancelRequest := sip.NewCancelRequest("", request, log.Fields{
 		"sent_at": time.Now(),
 	})
+	cancelRequest.SetRecipient(request.Recipient())
 	if err := s.Send(cancelRequest); err != nil {
 		s.Log().WithFields(map[string]interface{}{
 			"invite_request":  request.Short(),

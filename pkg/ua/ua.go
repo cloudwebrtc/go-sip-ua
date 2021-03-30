@@ -196,21 +196,18 @@ func (ua *UserAgent) Request(req *sip.Request) (sip.ClientTransaction, error) {
 }
 
 func (ua *UserAgent) handleBye(request sip.Request, tx sip.ServerTransaction) {
-
 	ua.Log().Debugf("handleBye: Request => %s, body => %s", request.Short(), request.Body())
 	response := sip.NewResponseFromRequest(request.MessageID(), request, 200, "OK", "")
-
+	tx.Respond(response)
 	callID, ok := request.CallID()
 	if ok {
 		if v, found := ua.iss.Load(*callID); found {
 			is := v.(*session.Session)
 			ua.iss.Delete(*callID)
 			var transaction sip.Transaction = tx.(sip.Transaction)
-			ua.handleInviteState(is, &request, nil, session.Terminated, &transaction)
+			ua.handleInviteState(is, &request, &response, session.Terminated, &transaction)
 		}
 	}
-
-	tx.Respond(response)
 }
 
 func (ua *UserAgent) handleCancel(request sip.Request, tx sip.ServerTransaction) {
