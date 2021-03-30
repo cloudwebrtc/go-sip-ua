@@ -36,7 +36,7 @@ type Profile struct {
 	Server        string
 	ContactURI    sip.Uri
 	ContactParams map[string]string
-	Route         *sip.Uri
+	Proxies       *ProxiesConfig
 }
 
 // Contact .
@@ -73,14 +73,14 @@ func NewProfile(
 	authInfo *AuthInfo,
 	expires uint32,
 	stack *stack.SipStack,
-	route *sip.Uri,
+	proxies *ProxiesConfig,
 ) *Profile {
 	p := &Profile{
 		URI:         uri,
 		DisplayName: displayName,
 		AuthInfo:    authInfo,
 		Expires:     expires,
-		Route:       route,
+		Proxies:     proxies,
 	}
 	if stack != nil { // populate the Contact field
 		var transport string

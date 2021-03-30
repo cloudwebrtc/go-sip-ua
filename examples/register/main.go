@@ -11,6 +11,7 @@ import (
 	"github.com/cloudwebrtc/go-sip-ua/pkg/stack"
 	"github.com/cloudwebrtc/go-sip-ua/pkg/ua"
 	"github.com/ghettovoice/gosip/log"
+	"github.com/ghettovoice/gosip/sip"
 	"github.com/ghettovoice/gosip/sip/parser"
 )
 
@@ -54,6 +55,11 @@ func main() {
 		logger.Error(err)
 	}
 
+	proxies := &account.ProxiesConfig{
+		ForceLooseRoute: true,
+		OutboundProxes:  []sip.Uri{route},
+	}
+
 	profile := account.NewProfile(uri.Clone(), "goSIP",
 		&account.AuthInfo{
 			AuthUser: "100",
@@ -62,7 +68,7 @@ func main() {
 		},
 		1800,
 		stack,
-		&route,
+		proxies,
 	)
 
 	register, err := ua.SendRegister(profile, uri, profile.Expires, nil)

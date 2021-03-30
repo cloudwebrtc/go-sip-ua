@@ -65,7 +65,7 @@ func init() {
 //NewB2BUA .
 func NewB2BUA() *B2BUA {
 	b := &B2BUA{
-		registry: registry.Registry(&*registry.NewMemoryRegistry()),
+		registry: registry.Registry(registry.NewMemoryRegistry()),
 		accounts: make(map[string]string),
 		rfc8599:  registry.NewRFC8599(pushCallback),
 	}
@@ -127,12 +127,17 @@ func NewB2BUA() *B2BUA {
 					logger.Error(err2)
 				}
 
+				proxies := &account.ProxiesConfig{
+					ForceLooseRoute: true,
+					OutboundProxes:  []sip.Uri{route},
+				}
+
 				// Create a temporary profile. In the future, it will support reading profiles from files or data
 				// For example: use a specific ip or sip account as outbound trunk
-				profile := account.NewProfile(caller, displayName, nil, 0, stack, &route)
+				profile := account.NewProfile(caller, displayName, nil, 0, stack, proxies)
 
 				offer := sess.RemoteSdp()
-				dest, err := ua.Invite(profile, called, called, &route, &offer)
+				dest, err := ua.Invite(profile, called, called, &offer)
 				if err != nil {
 					logger.Errorf("B-Leg session error: %v", err)
 					return
@@ -157,7 +162,7 @@ func NewB2BUA() *B2BUA {
 				instance, err := pusher.WaitContactOnline()
 				if err != nil {
 					logger.Errorf("Push failed, error: %v", err)
-					sess.Reject(500, fmt.Sprint("Push failed"))
+					sess.Reject(500, fmt.Sprintf("push failed %v", err))
 					return
 				}
 				doInvite(instance)

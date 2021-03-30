@@ -85,12 +85,12 @@ func (ua *UserAgent) buildRequest(
 	contact *sip.Address,
 	recipient sip.Uri,
 	callID *sip.CallID,
-	route *sip.Uri) (*sip.Request, error) {
+	proxies *account.ProxiesConfig) (*sip.Request, error) {
 
 	builder := sip.NewRequestBuilder().SetMethod(method).SetFrom(from).SetTo(to).SetContact(contact).SetRecipient(recipient)
 
-	if route != nil {
-		builder.SetRoutes([]sip.Uri{*route})
+	if proxies != nil {
+		builder.SetRoutes(proxies.OutboundProxes)
 	}
 
 	if callID != nil {
@@ -117,7 +117,7 @@ func (ua *UserAgent) SendRegister(profile *account.Profile, recipient sip.Uri, e
 	return register, nil
 }
 
-func (ua *UserAgent) Invite(profile *account.Profile, target sip.Uri, recipient sip.Uri, route *sip.Uri, body *string) (*session.Session, error) {
+func (ua *UserAgent) Invite(profile *account.Profile, target sip.Uri, recipient sip.Uri, body *string) (*session.Session, error) {
 
 	from := &sip.Address{
 		DisplayName: sip.String{Str: profile.DisplayName},
@@ -131,7 +131,7 @@ func (ua *UserAgent) Invite(profile *account.Profile, target sip.Uri, recipient 
 		Uri: target,
 	}
 
-	request, err := ua.buildRequest(sip.INVITE, from, to, contact, recipient, nil, route)
+	request, err := ua.buildRequest(sip.INVITE, from, to, contact, recipient, nil, profile.Proxies)
 	if err != nil {
 		ua.Log().Errorf("INVITE: err = %v", err)
 		return nil, err

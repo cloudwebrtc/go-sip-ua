@@ -101,6 +101,11 @@ func main() {
 		logger.Error(err)
 	}
 
+	proxies := &account.ProxiesConfig{
+		ForceLooseRoute: true,
+		OutboundProxes:  []sip.Uri{route},
+	}
+
 	profile := account.NewProfile(uri.Clone(), "goSIP/example-client",
 		&account.AuthInfo{
 			AuthUser: "100",
@@ -109,7 +114,7 @@ func main() {
 		},
 		1800,
 		stack,
-		&route,
+		proxies,
 	)
 
 	register, _ := ua.SendRegister(profile, uri, profile.Expires, nil)
@@ -124,12 +129,7 @@ func main() {
 		logger.Error(err)
 	}
 
-	route, err = parser.ParseUri("sip:@127.0.0.1:5081;transport=wss;lr")
-	if err != nil {
-		logger.Error(err)
-	}
-
-	go ua.Invite(profile, called, called, &route, &sdp)
+	go ua.Invite(profile, called, called, &sdp)
 
 	<-stop
 
