@@ -16,14 +16,14 @@ type Register struct {
 	timer      *time.Timer
 	profile    *account.Profile
 	authorizer *auth.ClientAuthorizer
-	recipient  sip.SipUri
+	recipient  sip.Uri
 	request    *sip.Request
 	ctx        context.Context
 	cancel     context.CancelFunc
 	data       interface{}
 }
 
-func NewRegister(ua *UserAgent, profile *account.Profile, recipient sip.SipUri, data interface{}) *Register {
+func NewRegister(ua *UserAgent, profile *account.Profile, recipient sip.Uri, data interface{}) *Register {
 	r := &Register{
 		ua:        ua,
 		profile:   profile,
@@ -53,7 +53,7 @@ func (r *Register) SendRegister(expires uint32) error {
 	contact := profile.Contact()
 
 	if r.request == nil || expires == 0 {
-		request, err := ua.buildRequest(sip.REGISTER, from, to, contact, recipient, nil)
+		request, err := ua.buildRequest(sip.REGISTER, from, to, contact, recipient, nil, profile.Route)
 		if err != nil {
 			ua.Log().Errorf("Register: err = %v", err)
 			return err

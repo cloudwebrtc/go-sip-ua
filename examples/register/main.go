@@ -49,6 +49,11 @@ func main() {
 		logger.Error(err)
 	}
 
+	route, err := parser.ParseUri("sip:100@127.0.0.1:5060;transport=udp;lr") // this is the remote address
+	if err != nil {
+		logger.Error(err)
+	}
+
 	profile := account.NewProfile(uri.Clone(), "goSIP",
 		&account.AuthInfo{
 			AuthUser: "100",
@@ -57,14 +62,10 @@ func main() {
 		},
 		1800,
 		stack,
+		&route,
 	)
 
-	recipient, err := parser.ParseSipUri("sip:100@127.0.0.1;transport=udp") // this is the remote address
-	if err != nil {
-		logger.Error(err)
-	}
-
-	register, err := ua.SendRegister(profile, recipient, profile.Expires, nil)
+	register, err := ua.SendRegister(profile, uri, profile.Expires, nil)
 	if err != nil {
 		logger.Error(err)
 	}

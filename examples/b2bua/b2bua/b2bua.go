@@ -122,17 +122,17 @@ func NewB2BUA() *B2BUA {
 					displayName = from.DisplayName.String()
 				}
 
-				// Create a temporary profile. In the future, it will support reading profiles from files or data
-				// For example: use a specific ip or sip account as outbound trunk
-				profile := account.NewProfile(caller, displayName, nil, 0, stack)
-
-				recipient, err2 := parser.ParseSipUri("sip:" + called.User().String() + "@" + instance.Source + ";transport=" + instance.Transport)
+				route, err2 := parser.ParseUri("sip:" + instance.Source + ";transport=" + instance.Transport + ";lr")
 				if err2 != nil {
 					logger.Error(err2)
 				}
 
+				// Create a temporary profile. In the future, it will support reading profiles from files or data
+				// For example: use a specific ip or sip account as outbound trunk
+				profile := account.NewProfile(caller, displayName, nil, 0, stack, &route)
+
 				offer := sess.RemoteSdp()
-				dest, err := ua.Invite(profile, called, recipient, &offer)
+				dest, err := ua.Invite(profile, called, called, &route, &offer)
 				if err != nil {
 					logger.Errorf("B-Leg session error: %v", err)
 					return

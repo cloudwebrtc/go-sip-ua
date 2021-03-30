@@ -83,10 +83,15 @@ func (ua *UserAgent) buildRequest(
 	from *sip.Address,
 	to *sip.Address,
 	contact *sip.Address,
-	recipient sip.SipUri,
-	callID *sip.CallID) (*sip.Request, error) {
+	recipient sip.Uri,
+	callID *sip.CallID,
+	route *sip.Uri) (*sip.Request, error) {
 
-	builder := sip.NewRequestBuilder().SetMethod(method).SetFrom(from).SetTo(to).SetContact(contact).SetRecipient(recipient.Clone())
+	builder := sip.NewRequestBuilder().SetMethod(method).SetFrom(from).SetTo(to).SetContact(contact).SetRecipient(recipient)
+
+	if route != nil {
+		builder.SetRoutes([]sip.Uri{*route})
+	}
 
 	if callID != nil {
 		builder.SetCallID(callID)
@@ -102,7 +107,7 @@ func (ua *UserAgent) buildRequest(
 	return &req, nil
 }
 
-func (ua *UserAgent) SendRegister(profile *account.Profile, recipient sip.SipUri, expires uint32, userdata interface{}) (*Register, error) {
+func (ua *UserAgent) SendRegister(profile *account.Profile, recipient sip.Uri, expires uint32, userdata interface{}) (*Register, error) {
 	register := NewRegister(ua, profile, recipient, userdata)
 	err := register.SendRegister(expires)
 	if err != nil {
@@ -112,7 +117,7 @@ func (ua *UserAgent) SendRegister(profile *account.Profile, recipient sip.SipUri
 	return register, nil
 }
 
-func (ua *UserAgent) Invite(profile *account.Profile, target sip.Uri, recipient sip.SipUri, body *string) (*session.Session, error) {
+func (ua *UserAgent) Invite(profile *account.Profile, target sip.Uri, recipient sip.Uri, route *sip.Uri, body *string) (*session.Session, error) {
 
 	from := &sip.Address{
 		DisplayName: sip.String{Str: profile.DisplayName},
@@ -126,7 +131,7 @@ func (ua *UserAgent) Invite(profile *account.Profile, target sip.Uri, recipient 
 		Uri: target,
 	}
 
-	request, err := ua.buildRequest(sip.INVITE, from, to, contact, recipient, nil)
+	request, err := ua.buildRequest(sip.INVITE, from, to, contact, recipient, nil, route)
 	if err != nil {
 		ua.Log().Errorf("INVITE: err = %v", err)
 		return nil, err
