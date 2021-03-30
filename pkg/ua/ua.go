@@ -3,7 +3,7 @@ package ua
 import (
 	"context"
 	"fmt"
-	"net"
+	"strconv"
 	"sync"
 
 	"github.com/cloudwebrtc/go-sip-ua/pkg/account"
@@ -102,32 +102,6 @@ func (ua *UserAgent) buildRequest(
 	return &req, nil
 }
 
-func (ua *UserAgent) buildViaHopHeader(target sip.SipUri) *sip.ViaHop {
-	protocol := "udp"
-	if nt, ok := target.UriParams().Get("transport"); ok {
-		protocol = nt.String()
-	}
-	s := ua.config.SipStack
-	netinfo := s.GetNetworkInfo(protocol)
-
-	var host string = netinfo.Host
-	if net.ParseIP(target.Host()).IsLoopback() {
-		host = "127.0.0.1"
-	}
-
-	port := netinfo.Port
-
-	viaHop := &sip.ViaHop{
-		ProtocolName:    "SIP",
-		ProtocolVersion: "2.0",
-		Transport:       protocol,
-		Host:            host,
-		Port:            port,
-		Params:          sip.NewParams().Add("branch", sip.String{Str: sip.GenerateBranch()}),
-	}
-	return viaHop
-}
-
 func (ua *UserAgent) SendRegister(profile *account.Profile, recipient sip.SipUri, expires uint32, userdata interface{}) (*Register, error) {
 	register := NewRegister(ua, profile, recipient, userdata)
 	err := register.SendRegister(expires)
@@ -169,7 +143,7 @@ func (ua *UserAgent) Invite(profile *account.Profile, target sip.Uri, recipient 
 		authorizer = auth.NewClientAuthorizer(profile.AuthInfo.AuthUser, profile.AuthInfo.Password)
 	}
 
-	resp, err := ua.RequestWithContext(context.TODO(), *request, authorizer, false)
+	resp, err := ua.RequestWithContext(context.TODO(), *request, authorizer, false, 1)
 	if err != nil {
 		ua.Log().Errorf("INVITE: Request [INVITE] failed, err => %v", err)
 		return nil, err
@@ -188,7 +162,7 @@ func (ua *UserAgent) Invite(profile *account.Profile, target sip.Uri, recipient 
 		}
 	}
 
-	return nil, fmt.Errorf("Invite session not found, unknown errors.")
+	return nil, fmt.Errorf("invite session not found, unknown errors")
 }
 
 func (ua *UserAgent) Request(req *sip.Request) (sip.ClientTransaction, error) {
@@ -198,6 +172,32 @@ func (ua *UserAgent) Request(req *sip.Request) (sip.ClientTransaction, error) {
 func (ua *UserAgent) handleBye(request sip.Request, tx sip.ServerTransaction) {
 	ua.Log().Debugf("handleBye: Request => %s, body => %s", request.Short(), request.Body())
 	response := sip.NewResponseFromRequest(request.MessageID(), request, 200, "OK", "")
+
+	if viaHop, ok := request.ViaHop(); ok {
+		var (
+			host string
+			port sip.Port
+		)
+		host = viaHop.Host
+		if viaHop.Params != nil {
+			if received, ok := viaHop.Params.Get("received"); ok && received.String() != "" {
+				host = received.String()
+			}
+			if rport, ok := viaHop.Params.Get("rport"); ok && rport != nil && rport.String() != "" {
+				if p, err := strconv.Atoi(rport.String()); err == nil {
+					port = sip.Port(uint16(p))
+				}
+			} else if request.Recipient().Port() != nil {
+				port = *request.Recipient().Port()
+			} else {
+				port = sip.DefaultPort(request.Transport())
+			}
+		}
+
+		dest := fmt.Sprintf("%v:%v", host, port)
+		response.SetDestination(dest)
+	}
+
 	tx.Respond(response)
 	callID, ok := request.CallID()
 	if ok {
@@ -290,7 +290,7 @@ func (ua *UserAgent) handleInvite(request sip.Request, tx sip.ServerTransaction)
 }
 
 // RequestWithContext .
-func (ua *UserAgent) RequestWithContext(ctx context.Context, request sip.Request, authorizer sip.Authorizer, waitForResult bool) (sip.Response, error) {
+func (ua *UserAgent) RequestWithContext(ctx context.Context, request sip.Request, authorizer sip.Authorizer, waitForResult bool, attempt int) (sip.Response, error) {
 	s := ua.config.SipStack
 	tx, err := s.Request(request)
 	if err != nil {
@@ -401,12 +401,13 @@ func (ua *UserAgent) RequestWithContext(ctx context.Context, request sip.Request
 				}
 
 				// unauth request
-				if (response.StatusCode() == 401 || response.StatusCode() == 407) && authorizer != nil {
+				needAuth := (response.StatusCode() == 401 || response.StatusCode() == 407) && attempt < 2
+				if needAuth && authorizer != nil {
 					if err := authorizer.AuthorizeRequest(request, response); err != nil {
 						errs <- err
 						return
 					}
-					if response, err := ua.RequestWithContext(ctx, request, nil, true); err == nil {
+					if response, err := ua.RequestWithContext(ctx, request, authorizer, true, attempt+1); err == nil {
 						responses <- response
 					} else {
 						errs <- err
@@ -455,7 +456,6 @@ func (ua *UserAgent) RequestWithContext(ctx context.Context, request sip.Request
 					if v, found := ua.iss.Load(*callID); found {
 						is := v.(*session.Session)
 						ua.iss.Delete(*callID)
-						// handle Ringing or Processing with sdp
 						is.SetState(session.Failure)
 						ua.handleInviteState(is, &request, &response, session.Failure, nil)
 					}
@@ -466,7 +466,6 @@ func (ua *UserAgent) RequestWithContext(ctx context.Context, request sip.Request
 				if ok {
 					if v, found := ua.iss.Load(*callID); found {
 						if request.IsInvite() {
-							// handle Ringing or Processing with sdp
 							is := v.(*session.Session)
 							is.SetState(session.Confirmed)
 							ua.handleInviteState(is, &request, &response, session.Confirmed, nil)

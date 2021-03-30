@@ -10,7 +10,7 @@ import (
 	gosip_util "github.com/ghettovoice/gosip/util"
 )
 
-type RequestCallback func(ctx context.Context, request sip.Request, authorizer sip.Authorizer, waitForResult bool) (sip.Response, error)
+type RequestCallback func(ctx context.Context, request sip.Request, authorizer sip.Authorizer, waitForResult bool, attempt int) (sip.Response, error)
 
 type Session struct {
 	lock           sync.Mutex
@@ -240,7 +240,7 @@ func (s *Session) Bye() {
 
 func (s *Session) sendRequest(req sip.Request) (sip.Response, error) {
 	s.Log().Debugf(s.uaType+" send request: %v => \n%v", req.Method(), req)
-	return s.requestCallbck(context.TODO(), req, nil, false)
+	return s.requestCallbck(context.TODO(), req, nil, false, 1)
 }
 
 // Reject Reject incoming call or for re-INVITE or UPDATE,
@@ -249,6 +249,7 @@ func (s *Session) Reject(statusCode sip.StatusCode, reason string) {
 	request := s.request
 	s.Log().Debugf("Reject: Request => %s, body => %s", request.Short(), request.Body())
 	response := sip.NewResponseFromRequest(request.MessageID(), request, statusCode, reason, "")
+	response.AppendHeader(s.localURI.AsContactHeader())
 	tx.Respond(response)
 }
 
@@ -346,7 +347,7 @@ func (s *Session) Provisional(statusCode sip.StatusCode, reason string) {
 	} else {
 		response = sip.NewResponseFromRequest(request.MessageID(), request, statusCode, reason, "")
 	}
-
+	response.AppendHeader(s.localURI.AsContactHeader())
 	s.response = response
 	tx.Respond(response)
 }
@@ -370,14 +371,21 @@ func (s *Session) makeRequest(uaType string, method sip.RequestMethod, msgID sip
 	to := s.remoteURI.Clone().AsToHeader()
 	newRequest.AppendHeader(to)
 	newRequest.SetRecipient(s.request.Recipient())
+	sip.CopyHeaders("Via", inviteRequest, newRequest)
 
 	if uaType == "UAC" {
-		sip.CopyHeaders("Via", inviteRequest, newRequest)
+		if contact, ok := s.request.Contact(); ok {
+			newRequest.AppendHeader(contact)
+		}
+
 		if len(inviteRequest.GetHeaders("Route")) > 0 {
 			sip.CopyHeaders("Route", inviteRequest, newRequest)
 		}
 	} else if uaType == "UAS" {
-		sip.CopyHeaders("Via", inviteRequest, newRequest)
+		if contact, ok := s.response.Contact(); ok {
+			newRequest.AppendHeader(contact)
+		}
+
 		if len(inviteResponse.GetHeaders("Route")) > 0 {
 			sip.CopyHeaders("Route", inviteResponse, newRequest)
 		}
@@ -389,6 +397,7 @@ func (s *Session) makeRequest(uaType string, method sip.RequestMethod, msgID sip
 	newRequest.AppendHeader(&maxForwardsHeader)
 	sip.CopyHeaders("Call-ID", inviteRequest, newRequest)
 	sip.CopyHeaders("CSeq", inviteRequest, newRequest)
+
 	cseq, _ := newRequest.CSeq()
 	cseq.SeqNo++
 	cseq.MethodName = method

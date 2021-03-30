@@ -76,7 +76,7 @@ func (r *Register) SendRegister(expires uint32) error {
 		r.authorizer = auth.NewClientAuthorizer(profile.AuthInfo.AuthUser, profile.AuthInfo.Password)
 	}
 
-	resp, err := ua.RequestWithContext(r.ctx, *r.request, r.authorizer, true)
+	resp, err := ua.RequestWithContext(r.ctx, *r.request, r.authorizer, true, 1)
 
 	if err != nil {
 		ua.Log().Errorf("Request [%s] failed, err => %v", sip.REGISTER, err)

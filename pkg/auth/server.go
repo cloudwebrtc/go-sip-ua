@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cloudwebrtc/go-sip-ua/pkg/util"
 	"github.com/ghettovoice/gosip/log"
 	"github.com/ghettovoice/gosip/sip"
 )
@@ -108,9 +107,7 @@ func (auth *ServerAuthorizer) requestAuthentication(request sip.Request, tx sip.
 		created: time.Now(),
 	}
 	response.SetBody("", true)
-	util.BuildContactHeader("Contact", request, response, nil)
 	tx.Respond(response)
-	return
 }
 
 func (auth *ServerAuthorizer) checkAuthorization(request sip.Request, tx sip.ServerTransaction,
