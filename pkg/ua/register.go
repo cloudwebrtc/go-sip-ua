@@ -2,6 +2,7 @@ package ua
 
 import (
 	"context"
+	"strconv"
 	"time"
 
 	"github.com/cloudwebrtc/go-sip-ua/pkg/account"
@@ -110,6 +111,14 @@ func (r *Register) SendRegister(expires uint32) error {
 			hdrs := resp.GetHeaders("Expires")
 			if len(hdrs) > 0 {
 				expires = uint32(*(hdrs[0]).(*sip.Expires))
+			} else {
+				hdrs = resp.GetHeaders("Contact")
+				if len(hdrs) > 0 {
+					if cexpires, cexpirescok := (hdrs[0].(*sip.ContactHeader)).Params.Get("expires"); cexpirescok {
+						cexpiresint, _ := strconv.Atoi(cexpires.String())
+						expires = uint32(cexpiresint)
+					}
+				}
 			}
 			state := account.RegisterState{
 				Account:    profile,
