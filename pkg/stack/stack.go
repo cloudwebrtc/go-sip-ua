@@ -2,14 +2,16 @@ package stack
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"net"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/cloudwebrtc/go-sip-ua/pkg/auth"
+	"github.com/tevino/abool"
 
 	"github.com/ghettovoice/gosip/log"
 	"github.com/ghettovoice/gosip/sip"
@@ -51,13 +53,13 @@ type SipStackConfig struct {
 
 // SipStack a golang SIP Stack
 type SipStack struct {
+	running               abool.AtomicBool
 	config                *SipStackConfig
 	listenPorts           map[string]*sip.Port
 	tp                    transport.Layer
 	tx                    transaction.Layer
 	host                  string
 	ip                    net.IP
-	inShutdown            int32
 	hwg                   *sync.WaitGroup
 	hmu                   *sync.RWMutex
 	requestHandlers       map[sip.RequestMethod]RequestHandler
@@ -141,6 +143,8 @@ func NewSipStack(config *SipStackConfig, logger log.Logger) *SipStack {
 		s:   s,
 	}
 	s.tx = transaction.NewLayer(sipTp, logger.WithPrefix("transaction.Layer"))
+
+	s.running.Set()
 	go s.serve()
 
 	return s
@@ -220,7 +224,14 @@ func (s *SipStack) serve() {
 				return
 			}
 
-			s.Log().Errorf("received SIP transport error: %s", err)
+			var ferr *sip.MalformedMessageError
+			if errors.Is(err, io.EOF) {
+				s.Log().Debugf("received SIP transport error: %s", err)
+			} else if errors.As(err, &ferr) {
+				s.Log().Warnf("received SIP transport error: %s", err)
+			} else {
+				s.Log().Errorf("received SIP transport error: %s", err)
+			}
 
 			if connError, ok := err.(*transport.ConnectionError); ok {
 				if s.handleConnectionError != nil {
@@ -285,10 +296,9 @@ func (s *SipStack) handleRequest(req sip.Request, tx sip.ServerTransaction) {
 
 //Request Send SIP message
 func (s *SipStack) Request(req sip.Request) (sip.ClientTransaction, error) {
-	if s.shuttingDown() {
+	if !s.running.IsSet() {
 		return nil, fmt.Errorf("can not send through stopped server")
 	}
-
 	return s.tx.Request(s.prepareRequest(req))
 }
 
@@ -384,14 +394,13 @@ func (s *SipStack) prepareRequest(req sip.Request) sip.Request {
 
 // Respond .
 func (s *SipStack) Respond(res sip.Response) (sip.ServerTransaction, error) {
-	if s.shuttingDown() {
+	if !s.running.IsSet() {
 		return nil, fmt.Errorf("can not send through stopped server")
 	}
 
 	return s.tx.Respond(s.prepareResponse(res))
 }
 
-// RespondOnRequest .
 func (s *SipStack) RespondOnRequest(
 	request sip.Request,
 	status sip.StatusCode,
@@ -413,7 +422,7 @@ func (s *SipStack) RespondOnRequest(
 
 // Send .
 func (s *SipStack) Send(msg sip.Message) error {
-	if s.shuttingDown() {
+	if !s.running.IsSet() {
 		return fmt.Errorf("can not send through stopped server")
 	}
 
@@ -432,18 +441,12 @@ func (s *SipStack) prepareResponse(res sip.Response) sip.Response {
 	return res
 }
 
-func (s *SipStack) shuttingDown() bool {
-	return atomic.LoadInt32(&s.inShutdown) != 0
-}
-
 // Shutdown gracefully shutdowns SIP server
 func (s *SipStack) Shutdown() {
-	if s.shuttingDown() {
+	if !s.running.IsSet() {
 		return
 	}
-
-	atomic.AddInt32(&s.inShutdown, 1)
-	defer atomic.AddInt32(&s.inShutdown, -1)
+	s.running.UnSet()
 	// stop transaction layer
 	s.tx.Cancel()
 	<-s.tx.Done()
@@ -521,10 +524,8 @@ func (s *SipStack) appendAutoHeaders(msg sip.Message) {
 		msg.AppendHeader(&userAgentHeader)
 	}
 
-	if s.tp.IsStreamed(msg.Transport()) {
-		if hdrs := msg.GetHeaders("Content-Length"); len(hdrs) == 0 {
-			msg.SetBody(msg.Body(), true)
-		}
+	if hdrs := msg.GetHeaders("Content-Length"); len(hdrs) == 0 {
+		msg.SetBody(msg.Body(), true)
 	}
 }
 
