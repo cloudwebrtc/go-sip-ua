@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cloudwebrtc/go-sip-ua/pkg/utils"
 	"github.com/ghettovoice/gosip/log"
 	"github.com/ghettovoice/gosip/sip"
 )
@@ -35,14 +36,14 @@ type ServerAuthorizer struct {
 }
 
 // NewServerAuthorizer .
-func NewServerAuthorizer(callback RequestCredentialCallback, realm string, authInt bool, logger log.Logger) *ServerAuthorizer {
+func NewServerAuthorizer(callback RequestCredentialCallback, realm string, authInt bool) *ServerAuthorizer {
 	auth := &ServerAuthorizer{
 		sessions:          make(map[string]AuthSession),
 		requestCredential: callback,
 		useAuthInt:        authInt,
 		realm:             realm,
 	}
-	auth.log = logger.WithPrefix("ServerAuthorizer")
+	auth.log = utils.NewLogrusLogger(log.DebugLevel, "ServerAuthorizer", nil)
 	return auth
 }
 

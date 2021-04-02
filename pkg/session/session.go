@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/cloudwebrtc/go-sip-ua/pkg/utils"
 	"github.com/ghettovoice/gosip/log"
 	"github.com/ghettovoice/gosip/sip"
-	gosip_util "github.com/ghettovoice/gosip/util"
+	"github.com/ghettovoice/gosip/util"
 )
 
 type RequestCallback func(ctx context.Context, request sip.Request, authorizer sip.Authorizer, waitForResult bool, attempt int) (sip.Response, error)
@@ -45,13 +46,13 @@ func NewInviteSession(reqcb RequestCallback, uaType string,
 		contact:        contact,
 	}
 
-	s.logger = logger.WithPrefix("session.Session")
+	s.logger = utils.NewLogrusLogger(log.DebugLevel, "Session", nil)
 
 	to, _ := req.To()
 	from, _ := req.From()
 
 	if to.Params != nil && !to.Params.Has("tag") {
-		to.Params.Add("tag", sip.String{Str: gosip_util.RandString(8)})
+		to.Params.Add("tag", sip.String{Str: util.RandString(8)})
 		req.RemoveHeader("To")
 		req.AppendHeader(to)
 	}

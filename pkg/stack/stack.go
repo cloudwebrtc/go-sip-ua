@@ -13,6 +13,7 @@ import (
 	"github.com/cloudwebrtc/go-sip-ua/pkg/auth"
 	"github.com/tevino/abool"
 
+	"github.com/cloudwebrtc/go-sip-ua/pkg/utils"
 	"github.com/ghettovoice/gosip/log"
 	"github.com/ghettovoice/gosip/sip"
 	"github.com/ghettovoice/gosip/transaction"
@@ -72,12 +73,12 @@ type SipStack struct {
 }
 
 // NewSipStack creates new instance of SipStack.
-func NewSipStack(config *SipStackConfig, logger log.Logger) *SipStack {
+func NewSipStack(config *SipStackConfig) *SipStack {
 	if config == nil {
 		config = &SipStackConfig{}
 	}
 
-	logger = logger.WithPrefix("SipStack")
+	logger := utils.NewLogrusLogger(log.DebugLevel, "SipStack", nil)
 
 	var host string
 	var ip net.IP
@@ -132,17 +133,13 @@ func NewSipStack(config *SipStackConfig, logger log.Logger) *SipStack {
 		s.authenticator = &config.ServerAuthManager
 	}
 
-	s.log = logger.WithFields(log.Fields{
-		"sip_server_ptr": fmt.Sprintf("%p", s),
-	})
-
-	s.tp = transport.NewLayer(ip, dnsResolver, config.MsgMapper, logger.WithPrefix("transport.Layer"))
-
+	s.log = logger
+	s.tp = transport.NewLayer(ip, dnsResolver, config.MsgMapper, utils.NewLogrusLogger(log.DebugLevel, "transport.Layer", nil))
 	sipTp := &sipTransport{
 		tpl: s.tp,
 		s:   s,
 	}
-	s.tx = transaction.NewLayer(sipTp, logger.WithPrefix("transaction.Layer"))
+	s.tx = transaction.NewLayer(sipTp, utils.NewLogrusLogger(log.DebugLevel, "transaction.Layer", nil))
 
 	s.running.Set()
 	go s.serve()

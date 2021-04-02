@@ -12,7 +12,7 @@ import (
 	"github.com/cloudwebrtc/go-sip-ua/pkg/session"
 	"github.com/cloudwebrtc/go-sip-ua/pkg/stack"
 	"github.com/cloudwebrtc/go-sip-ua/pkg/ua"
-	"github.com/cloudwebrtc/go-sip-ua/pkg/util"
+	"github.com/cloudwebrtc/go-sip-ua/pkg/utils"
 	"github.com/ghettovoice/gosip/log"
 	"github.com/ghettovoice/gosip/sip"
 	"github.com/ghettovoice/gosip/sip/parser"
@@ -58,8 +58,7 @@ var (
 )
 
 func init() {
-	//logger = util.NewLogrusLogger(logrus.DebugLevel).WithPrefix("B2BUA")
-	logger = log.NewDefaultLogrusLogger().WithPrefix("B2BUA")
+	logger = utils.NewLogrusLogger(log.InfoLevel, "B2BUA", nil)
 }
 
 //NewB2BUA .
@@ -75,10 +74,10 @@ func NewB2BUA() *B2BUA {
 		Extensions: []string{"replaces", "outbound"},
 		Dns:        "8.8.8.8",
 		ServerAuthManager: stack.ServerAuthManager{
-			Authenticator:     auth.NewServerAuthorizer(b.requestCredential, "b2bua", false, logger),
+			Authenticator:     auth.NewServerAuthorizer(b.requestCredential, "b2bua", false),
 			RequiresChallenge: b.requiresChallenge,
 		},
-	}, logger)
+	})
 
 	stack.OnConnectionError(b.handleConnectionError)
 
@@ -103,7 +102,7 @@ func NewB2BUA() *B2BUA {
 	ua := ua.NewUserAgent(&ua.UserAgentConfig{
 
 		SipStack: stack,
-	}, logger)
+	})
 
 	ua.InviteStateHandler = func(sess *session.Session, req *sip.Request, resp *sip.Response, state session.Status) {
 		logger.Infof("InviteStateHandler: state => %v, type => %s", state, sess.Direction())
@@ -334,7 +333,7 @@ func (b *B2BUA) handleRegister(request sip.Request, tx sip.ServerTransaction) {
 
 	resp := sip.NewResponseFromRequest(request.MessageID(), request, 200, reason, "")
 	sip.CopyHeaders("Expires", request, resp)
-	util.BuildContactHeader("Contact", request, resp, &expires)
+	utils.BuildContactHeader("Contact", request, resp, &expires)
 	tx.Respond(resp)
 
 }
@@ -342,4 +341,8 @@ func (b *B2BUA) handleRegister(request sip.Request, tx sip.ServerTransaction) {
 func (b *B2BUA) handleConnectionError(connError *transport.ConnectionError) {
 	logger.Debugf("Handle Connection Lost: Source: %v, Dest: %v, Network: %v", connError.Source, connError.Dest, connError.Net)
 	b.registry.HandleConnectionError(connError)
+}
+
+func (b *B2BUA) SetLogLevel(level log.Level) {
+	utils.SetLogLevel("B2BUA", level)
 }

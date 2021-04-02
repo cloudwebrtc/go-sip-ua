@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/cloudwebrtc/go-sip-ua/pkg/stack"
+	"github.com/cloudwebrtc/go-sip-ua/pkg/utils"
 	"github.com/ghettovoice/gosip/log"
 	"github.com/ghettovoice/gosip/sip"
 	"github.com/ghettovoice/gosip/sip/parser"
@@ -15,7 +16,7 @@ var (
 )
 
 func init() {
-	logger = log.NewDefaultLogrusLogger().WithPrefix("UserAgent")
+	logger = utils.NewLogrusLogger(log.DebugLevel, "UserAgent", nil)
 }
 
 //AuthInfo .

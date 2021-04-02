@@ -13,6 +13,7 @@ import (
 	"github.com/cloudwebrtc/go-sip-ua/pkg/session"
 	"github.com/cloudwebrtc/go-sip-ua/pkg/stack"
 	"github.com/cloudwebrtc/go-sip-ua/pkg/ua"
+	"github.com/cloudwebrtc/go-sip-ua/pkg/utils"
 	"github.com/ghettovoice/gosip/log"
 	"github.com/ghettovoice/gosip/sip"
 	"github.com/ghettovoice/gosip/sip/parser"
@@ -24,7 +25,7 @@ var (
 )
 
 func init() {
-	logger = log.NewDefaultLogrusLogger().WithPrefix("Client")
+	logger = utils.NewLogrusLogger(log.DebugLevel, "Client", nil)
 }
 
 func createUdp() *rtp.RtpUDPStream {
@@ -34,7 +35,7 @@ func createUdp() *rtp.RtpUDPStream {
 		dest, _ := net.ResolveUDPAddr(raddr.Network(), raddr.String())
 		logger.Infof("Echo rtp to %v", raddr)
 		udp.Send(data, dest)
-	}, logger)
+	})
 
 	go udp.Read()
 
@@ -47,7 +48,7 @@ func main() {
 	stack := stack.NewSipStack(&stack.SipStackConfig{
 		UserAgent:  "Go Sip Client/example-client",
 		Extensions: []string{"replaces", "outbound"},
-		Dns:        "8.8.8.8"}, logger)
+		Dns:        "8.8.8.8"})
 
 	listen := "0.0.0.0:5080"
 	logger.Infof("Listen => %s", listen)
@@ -66,7 +67,7 @@ func main() {
 
 	ua := ua.NewUserAgent(&ua.UserAgentConfig{
 		SipStack: stack,
-	}, logger)
+	})
 
 	ua.InviteStateHandler = func(sess *session.Session, req *sip.Request, resp *sip.Response, state session.Status) {
 		logger.Infof("InviteStateHandler: state => %v, type => %s", state, sess.Direction())

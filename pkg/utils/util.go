@@ -1,4 +1,4 @@
-package util
+package utils
 
 import (
 	"errors"
@@ -8,10 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ghettovoice/gosip/log"
 	"github.com/ghettovoice/gosip/sip"
-	"github.com/sirupsen/logrus"
-	prefixed "github.com/x-cray/logrus-prefixed-formatter"
 )
 
 var (
@@ -53,20 +50,6 @@ func AddParamsToContact(contact *sip.ContactHeader, expires *sip.Expires) {
 	if expires != nil {
 		contact.Params.Add("expires", sip.String{Str: fmt.Sprintf("%d", int(*expires))})
 	}
-}
-
-func NewLogrusLogger(level logrus.Level) *log.LogrusLogger {
-	logger := logrus.New()
-	logger.Level = logrus.ErrorLevel
-	logger.Formatter = &prefixed.TextFormatter{
-		FullTimestamp:   true,
-		TimestampFormat: "2006-01-02 15:04:05.000",
-		ForceColors:     true,
-		ForceFormatting: true,
-	}
-	logger.SetLevel(level)
-	logger.SetReportCaller(true)
-	return log.NewLogrusLogger(logger, "main", nil)
 }
 
 func ListenUDPInPortRange(portMin, portMax int, laddr *net.UDPAddr) (*net.UDPConn, error) {

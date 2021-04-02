@@ -10,6 +10,7 @@ import (
 	"github.com/cloudwebrtc/go-sip-ua/pkg/media/rtp"
 	"github.com/cloudwebrtc/go-sip-ua/pkg/stack"
 	"github.com/cloudwebrtc/go-sip-ua/pkg/ua"
+	"github.com/cloudwebrtc/go-sip-ua/pkg/utils"
 	"github.com/ghettovoice/gosip/log"
 	"github.com/ghettovoice/gosip/sip/parser"
 )
@@ -20,7 +21,7 @@ var (
 )
 
 func init() {
-	logger = log.NewDefaultLogrusLogger().WithPrefix("Client")
+	logger = utils.NewLogrusLogger(log.DebugLevel, "Register", nil)
 }
 
 func main() {
@@ -30,7 +31,7 @@ func main() {
 	stack := stack.NewSipStack(&stack.SipStackConfig{
 		UserAgent:  "Go Sip Client/example-register",
 		Extensions: []string{"replaces", "outbound"},
-		Dns:        "8.8.8.8"}, logger)
+		Dns:        "8.8.8.8"})
 
 	if err := stack.Listen("udp", "0.0.0.0:5066"); err != nil {
 		logger.Panic(err)
@@ -38,7 +39,7 @@ func main() {
 
 	ua := ua.NewUserAgent(&ua.UserAgentConfig{
 		SipStack: stack,
-	}, logger)
+	})
 
 	ua.RegisterStateHandler = func(state account.RegisterState) {
 		logger.Infof("RegisterStateHandler: user => %s, state => %v, expires => %v, reason => %v", state.Account.AuthInfo.AuthUser, state.StatusCode, state.Expiration, state.Reason)

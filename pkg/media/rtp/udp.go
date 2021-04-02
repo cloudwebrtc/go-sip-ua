@@ -3,7 +3,7 @@ package rtp
 import (
 	"net"
 
-	"github.com/cloudwebrtc/go-sip-ua/pkg/util"
+	"github.com/cloudwebrtc/go-sip-ua/pkg/utils"
 	"github.com/ghettovoice/gosip/log"
 )
 
@@ -21,10 +21,13 @@ type RtpUDPStream struct {
 	logger   log.Logger
 }
 
-func NewRtpUDPStream(bind string, portMin, portMax int, callback func(pkt []byte, raddr net.Addr), logger log.Logger) *RtpUDPStream {
+func NewRtpUDPStream(bind string, portMin, portMax int, callback func(pkt []byte, raddr net.Addr)) *RtpUDPStream {
+
+	logger := utils.NewLogrusLogger(log.DebugLevel, "Media", nil)
+
 	lAddr := &net.UDPAddr{IP: net.ParseIP(bind), Port: 0}
 	var err error
-	conn, err := util.ListenUDPInPortRange(portMin, portMax, lAddr)
+	conn, err := utils.ListenUDPInPortRange(portMin, portMax, lAddr)
 	if err != nil {
 		logger.Errorf("ListenUDP: err => %v", err)
 		return nil
@@ -35,7 +38,7 @@ func NewRtpUDPStream(bind string, portMin, portMax int, callback func(pkt []byte
 		stop:     false,
 		onPacket: callback,
 		laddr:    lAddr,
-		logger:   logger.WithPrefix("rtp.UdpStream"),
+		logger:   logger,
 	}
 }
 

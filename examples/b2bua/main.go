@@ -11,6 +11,8 @@ import (
 
 	"github.com/c-bata/go-prompt"
 	"github.com/cloudwebrtc/go-sip-ua/examples/b2bua/b2bua"
+	"github.com/cloudwebrtc/go-sip-ua/pkg/utils"
+	"github.com/ghettovoice/gosip/log"
 )
 
 func completer(d prompt.Document) []prompt.Suggest {
@@ -18,6 +20,9 @@ func completer(d prompt.Document) []prompt.Suggest {
 		{Text: "users", Description: "Show sip accounts"},
 		{Text: "onlines", Description: "Show online sip devices"},
 		{Text: "calls", Description: "Show active calls"},
+		{Text: "set debug on", Description: "Show debug msg in console"},
+		{Text: "set debug off", Description: "Turn off debug msg in console"},
+		{Text: "show loggers", Description: "Print Loggers"},
 		{Text: "exit", Description: "Exit"},
 	}
 	return prompt.FilterHasPrefix(s, d.GetWordBeforeCursor(), true)
@@ -45,6 +50,17 @@ func consoleLoop(b2bua *b2bua.B2BUA) {
 			prompt.OptionSuggestionBGColor(prompt.DarkGray))
 
 		switch t {
+		case "show loggers":
+			loggers := utils.GetLoggers()
+			for prefix, log := range loggers {
+				fmt.Printf("%v => %v\n", prefix, log.Level())
+			}
+		case "set debug on":
+			b2bua.SetLogLevel(log.DebugLevel)
+			fmt.Printf("Set Log level to debug\n")
+		case "set debug off":
+			b2bua.SetLogLevel(log.InfoLevel)
+			fmt.Printf("Set Log level to info\n")
 		case "users":
 			fallthrough
 		case "ul": /* user list*/

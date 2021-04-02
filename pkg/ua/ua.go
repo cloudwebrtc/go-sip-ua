@@ -15,6 +15,8 @@ import (
 	"github.com/ghettovoice/gosip/sip"
 	"github.com/ghettovoice/gosip/transaction"
 	"github.com/ghettovoice/gosip/util"
+
+	"github.com/cloudwebrtc/go-sip-ua/pkg/utils"
 )
 
 // UserAgentConfig .
@@ -38,13 +40,13 @@ type UserAgent struct {
 }
 
 //NewUserAgent .
-func NewUserAgent(config *UserAgentConfig, logger log.Logger) *UserAgent {
+func NewUserAgent(config *UserAgentConfig) *UserAgent {
 	ua := &UserAgent{
 		config:               config,
 		iss:                  sync.Map{},
 		InviteStateHandler:   nil,
 		RegisterStateHandler: nil,
-		log:                  logger.WithPrefix("UserAgent"),
+		log:                  utils.NewLogrusLogger(log.DebugLevel, "UserAgent", nil),
 	}
 	stack := config.SipStack
 	stack.OnRequest(sip.INVITE, ua.handleInvite)
