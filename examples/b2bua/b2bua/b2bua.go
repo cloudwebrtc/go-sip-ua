@@ -17,7 +17,6 @@ import (
 	"github.com/ghettovoice/gosip/sip"
 	"github.com/ghettovoice/gosip/sip/parser"
 	"github.com/ghettovoice/gosip/transport"
-	"github.com/sirupsen/logrus"
 )
 
 type B2BCall struct {
@@ -59,13 +58,14 @@ var (
 )
 
 func init() {
-	logger = util.NewLogrusLogger(logrus.DebugLevel).WithPrefix("B2BUA")
+	//logger = util.NewLogrusLogger(logrus.DebugLevel).WithPrefix("B2BUA")
+	logger = log.NewDefaultLogrusLogger().WithPrefix("B2BUA")
 }
 
 //NewB2BUA .
 func NewB2BUA() *B2BUA {
 	b := &B2BUA{
-		registry: registry.Registry(&*registry.NewMemoryRegistry()),
+		registry: registry.Registry(registry.NewMemoryRegistry()),
 		accounts: make(map[string]string),
 		rfc8599:  registry.NewRFC8599(pushCallback),
 	}

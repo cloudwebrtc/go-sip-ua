@@ -13,4 +13,5 @@ upx:
 server:
 	go build -o bin/simple-b2bua $(GO_LDFLAGS) examples/b2bua/main.go
 	go build -o bin/simple-client $(GO_LDFLAGS) examples/client/main.go
+	go build -o bin/simple-register $(GO_LDFLAGS) examples/register/main.go
 
