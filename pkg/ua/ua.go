@@ -298,18 +298,19 @@ func (ua *UserAgent) RequestWithContext(ctx context.Context, request sip.Request
 	if err != nil {
 		return nil, err
 	}
+	var cts sip.Transaction = tx.(sip.Transaction)
 
 	if request.IsInvite() {
 		callID, ok := request.CallID()
 		if ok {
-			var transaction sip.Transaction = tx.(sip.Transaction)
+
 			if _, found := ua.iss.Load(*callID); !found {
 				contact, _ := request.Contact()
-				is := session.NewInviteSession(ua.RequestWithContext, "UAC", contact, request, *callID, transaction, session.Outgoing, ua.Log())
+				is := session.NewInviteSession(ua.RequestWithContext, "UAC", contact, request, *callID, cts, session.Outgoing, ua.Log())
 				ua.iss.Store(*callID, is)
 				is.ProvideOffer(request.Body())
 				is.SetState(session.InviteSent)
-				ua.handleInviteState(is, &request, nil, session.InviteSent, &transaction)
+				ua.handleInviteState(is, &request, nil, session.InviteSent, &cts)
 			}
 		}
 	}
@@ -427,7 +428,7 @@ func (ua *UserAgent) RequestWithContext(ctx context.Context, request sip.Request
 		}
 	}()
 
-	waitForResponse := func() (sip.Response, error) {
+	waitForResponse := func(cts *sip.Transaction) (sip.Response, error) {
 		for {
 			select {
 			case provisional := <-provisionals:
@@ -437,10 +438,10 @@ func (ua *UserAgent) RequestWithContext(ctx context.Context, request sip.Request
 						is := v.(*session.Session)
 						is.StoreResponse(provisional)
 						// handle Ringing or Processing with sdp
-						ua.handleInviteState(is, &request, &provisional, session.Provisional, nil)
+						ua.handleInviteState(is, &request, &provisional, session.Provisional, cts)
 						if len(provisional.Body()) > 0 {
 							is.SetState(session.EarlyMedia)
-							ua.handleInviteState(is, &request, &provisional, session.EarlyMedia, nil)
+							ua.handleInviteState(is, &request, &provisional, session.EarlyMedia, cts)
 						}
 					}
 				}
@@ -485,10 +486,10 @@ func (ua *UserAgent) RequestWithContext(ctx context.Context, request sip.Request
 	}
 
 	if !waitForResult {
-		go waitForResponse()
+		go waitForResponse(&cts)
 		return nil, err
 	}
-	return waitForResponse()
+	return waitForResponse(&cts)
 }
 
 func (ua *UserAgent) Shutdown() {
