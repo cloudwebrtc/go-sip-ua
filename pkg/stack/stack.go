@@ -299,11 +299,13 @@ func (s *SipStack) Request(req sip.Request) (sip.ClientTransaction, error) {
 	return s.tx.Request(s.prepareRequest(req))
 }
 
-func (s SipStack) GetNetworkInfo(protocol string) *transport.Target {
+func (s *SipStack) GetNetworkInfo(protocol string) *transport.Target {
 	logger := s.Log()
 
 	var target transport.Target
-	if v, err := util.ResolveSelfIP(); err == nil {
+	if s.host != "" {
+		target.Host = s.host
+	} else if v, err := util.ResolveSelfIP(); err == nil {
 		target.Host = v.String()
 	} else {
 		logger.Panicf("resolve host IP failed: %s", err)
