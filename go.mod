@@ -6,7 +6,7 @@ require (
 	cloud.google.com/go/firestore v1.5.0 // indirect
 	firebase.google.com/go v3.13.0+incompatible
 	github.com/c-bata/go-prompt v0.2.6
-	github.com/ghettovoice/gosip v0.0.0-20210520124801-4622d3f142e4
+	github.com/ghettovoice/gosip v0.0.0-20210615141441-6aacd91ab132
 	github.com/google/uuid v1.2.0
 	github.com/kr/pretty v0.2.0 // indirect
 	github.com/mgutz/ansi v0.0.0-20200706080929-d51e80ef957d // indirect
