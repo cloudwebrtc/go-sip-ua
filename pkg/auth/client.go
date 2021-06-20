@@ -1,8 +1,6 @@
 package auth
 
 import (
-	"crypto/md5"
-	"encoding/hex"
 	"fmt"
 	"regexp"
 	"strings"
@@ -13,19 +11,33 @@ import (
 // currently only Digest and MD5
 type Authorization struct {
 	realm     string
+	qop       string
 	nonce     string
+	cnonce    string
+	opaque    string
 	algorithm string
 	username  string
 	password  string
 	uri       string
 	response  string
 	method    string
+	stale     string
+	nc        int
+	ncHex     string
+	domain    string
 	other     map[string]string
 }
 
 func AuthFromValue(value string) *Authorization {
 	auth := &Authorization{
 		algorithm: "MD5",
+		cnonce:    generateNonce(12),
+		opaque:    "",
+		stale:     "",
+		qop:       "",
+		nc:        0,
+		ncHex:     "00000000",
+		domain:    "",
 		other:     make(map[string]string),
 	}
 
@@ -34,12 +46,20 @@ func AuthFromValue(value string) *Authorization {
 	for _, match := range matches {
 		value2 := strings.Replace(match[2], "\"", "", -1)
 		switch match[1] {
+		case "qop":
+			auth.qop = value2
 		case "realm":
 			auth.realm = value2
 		case "algorithm":
 			auth.algorithm = value2
+		case "opaque":
+			auth.opaque = value2
 		case "nonce":
 			auth.nonce = value2
+		case "stale":
+			auth.stale = value2
+		case "domain":
+			auth.domain = value2
 		default:
 			auth.other[match[1]] = value2
 		}
@@ -72,21 +92,40 @@ func (auth *Authorization) SetPassword(password string) *Authorization {
 	return auth
 }
 
-func (auth *Authorization) CalcResponse() *Authorization {
-	auth.response = calcResponse(
-		auth.username,
-		auth.realm,
-		auth.password,
-		auth.method,
-		auth.uri,
-		auth.nonce,
-	)
-
+// calculates Authorization response https://www.ietf.org/rfc/rfc2617.txt
+func (auth *Authorization) CalcResponse(request sip.Request) *Authorization {
+	auth.nc += 1
+	hex := fmt.Sprintf("%x", auth.nc)
+	ncHex := "00000000"
+	auth.ncHex = ncHex[:len(ncHex)-1-len(hex)] + hex
+	// Nc-value = 8LHEX. Max value = 'FFFFFFFF'.
+	if auth.nc == 4294967296 {
+		auth.nc = 1
+		auth.ncHex = "00000001"
+	}
+	// HA1 = MD5(A1) = MD5(username:realm:password).
+	ha1 := md5Hex(auth.username + ":" + auth.realm + ":" + auth.password)
+	if auth.qop == "auth" {
+		// HA2 = MD5(A2) = MD5(method:digestURI).
+		ha2 := md5Hex(auth.method + ":" + auth.uri)
+		// Response = MD5(HA1:nonce:nonceCount:credentialsNonce:qop:HA2).
+		auth.response = md5Hex(ha1 + ":" + auth.nonce + ":" + auth.ncHex + ":" + auth.cnonce + ":auth:" + ha2)
+	} else if auth.qop == "auth-int" {
+		// HA2 = MD5(A2) = MD5(method:digestURI:MD5(entityBody)).
+		ha2 := md5Hex(auth.method + ":" + auth.uri + ":" + md5Hex(request.Body()))
+		// Response = MD5(HA1:nonce:nonceCount:credentialsNonce:qop:HA2).
+		auth.response = md5Hex(ha1 + ":" + auth.nonce + ":" + auth.ncHex + ":" + auth.cnonce + ":auth-int:" + ha2)
+	} else {
+		// HA2 = MD5(A2) = MD5(method:digestURI).
+		ha2 := md5Hex(auth.method) + ":" + auth.uri
+		// Response = MD5(HA1:nonce:HA2).
+		auth.response = md5Hex(ha1 + ":" + auth.nonce + ":" + ha2)
+	}
 	return auth
 }
 
 func (auth *Authorization) String() string {
-	return fmt.Sprintf(
+	digest := fmt.Sprintf(
 		`Digest realm="%s",algorithm=%s,nonce="%s",username="%s",uri="%s",response="%s"`,
 		auth.realm,
 		auth.algorithm,
@@ -95,27 +134,26 @@ func (auth *Authorization) String() string {
 		auth.uri,
 		auth.response,
 	)
-}
 
-// calculates Authorization response https://www.ietf.org/rfc/rfc2617.txt
-func calcResponse(username string, realm string, password string, method string, uri string, nonce string) string {
-	calcA1 := func() string {
-		encoder := md5.New()
-		encoder.Write([]byte(username + ":" + realm + ":" + password))
-
-		return hex.EncodeToString(encoder.Sum(nil))
-	}
-	calcA2 := func() string {
-		encoder := md5.New()
-		encoder.Write([]byte(method + ":" + uri))
-
-		return hex.EncodeToString(encoder.Sum(nil))
+	if auth.domain != "" {
+		digest += fmt.Sprintf(`domain="%s"`, auth.domain)
 	}
 
-	encoder := md5.New()
-	encoder.Write([]byte(calcA1() + ":" + nonce + ":" + calcA2()))
+	if auth.opaque != "" {
+		digest += fmt.Sprintf(`opaque="%s"`, auth.opaque)
+	}
 
-	return hex.EncodeToString(encoder.Sum(nil))
+	if auth.qop != "" {
+		digest += fmt.Sprintf(`qop="%s"`, auth.qop)
+		digest += fmt.Sprintf(`cnonce="%s"`, auth.cnonce)
+		digest += fmt.Sprintf(`nc="%s"`, auth.ncHex)
+	}
+
+	if len(auth.stale) > 0 {
+		digest += fmt.Sprintf(`stale=%s`, auth.stale)
+	}
+
+	return digest
 }
 
 func AuthorizeRequest(request sip.Request, response sip.Response, user, password sip.MaybeString) error {
@@ -140,11 +178,12 @@ func AuthorizeRequest(request sip.Request, response sip.Response, user, password
 			SetMethod(string(request.Method())).
 			SetUri(request.Recipient().String()).
 			SetUsername(user.String())
+
 		if password != nil {
 			auth.SetPassword(password.String())
 		}
 
-		auth.CalcResponse()
+		auth.CalcResponse(request)
 
 		var authorizationHeader *sip.GenericHeader
 		hdrs = request.GetHeaders(authorizeHeaderName)

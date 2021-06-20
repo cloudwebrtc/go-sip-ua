@@ -39,7 +39,7 @@ func TestUdpStream(t *testing.T) {
 		}
 
 		logger.Debugf("onpkt %v, raddr %v\n", got, raddr.String())
-	}, logger)
+	})
 
 	logger.Debugf("laddr %v\n", udp.LocalAddr())
 

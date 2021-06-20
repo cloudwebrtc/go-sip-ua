@@ -86,9 +86,20 @@ func (ua *UserAgent) buildRequest(
 	to *sip.Address,
 	contact *sip.Address,
 	recipient sip.SipUri,
+	routes []sip.Uri,
 	callID *sip.CallID) (*sip.Request, error) {
 
-	builder := sip.NewRequestBuilder().SetMethod(method).SetFrom(from).SetTo(to).SetContact(contact).SetRecipient(recipient.Clone())
+	builder := sip.NewRequestBuilder()
+
+	builder.SetMethod(method)
+	builder.SetFrom(from)
+	builder.SetTo(to)
+	builder.SetContact(contact)
+	builder.SetRecipient(recipient.Clone())
+
+	if len(routes) > 0 {
+		builder.SetRoutes(routes)
+	}
 
 	if callID != nil {
 		builder.SetCallID(callID)
@@ -128,7 +139,7 @@ func (ua *UserAgent) Invite(profile *account.Profile, target sip.Uri, recipient 
 		Uri: target,
 	}
 
-	request, err := ua.buildRequest(sip.INVITE, from, to, contact, recipient, nil)
+	request, err := ua.buildRequest(sip.INVITE, from, to, contact, recipient, profile.Routes, nil)
 	if err != nil {
 		ua.Log().Errorf("INVITE: err = %v", err)
 		return nil, err

@@ -53,7 +53,7 @@ func (r *Register) SendRegister(expires uint32) error {
 	contact := profile.Contact()
 
 	if r.request == nil || expires == 0 {
-		request, err := ua.buildRequest(sip.REGISTER, from, to, contact, recipient, nil)
+		request, err := ua.buildRequest(sip.REGISTER, from, to, contact, recipient, profile.Routes, nil)
 		if err != nil {
 			ua.Log().Errorf("Register: err = %v", err)
 			return err
@@ -75,7 +75,6 @@ func (r *Register) SendRegister(expires uint32) error {
 	if profile.AuthInfo != nil && r.authorizer == nil {
 		r.authorizer = auth.NewClientAuthorizer(profile.AuthInfo.AuthUser, profile.AuthInfo.Password)
 	}
-
 	resp, err := ua.RequestWithContext(r.ctx, *r.request, r.authorizer, true, 1)
 
 	if err != nil {

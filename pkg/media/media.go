@@ -6,6 +6,8 @@ type Media interface {
 	CreateAnswer() (*Description, error)
 	SetLocalDescription(desc *Description) error
 	SetRemoteDescription(desc *Description) error
+	Tracks() map[string]*Track
+	OnTrack(func(*Track))
 }
 
 //Description sdp

@@ -34,7 +34,7 @@ type Profile struct {
 	AuthInfo      *AuthInfo
 	Expires       uint32
 	InstanceID    string
-	Server        string
+	Routes        []sip.Uri
 	ContactURI    sip.Uri
 	ContactParams map[string]string
 }

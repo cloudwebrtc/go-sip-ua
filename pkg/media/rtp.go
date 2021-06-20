@@ -1,6 +1,7 @@
-package rtp
+package media
 
-type RTP interface {
+type Track interface {
+	Name() string
 	WriteRTP(buf []byte)
 	WriteRTCP(buf []byte)
 	ReadRTP() <-chan []byte
