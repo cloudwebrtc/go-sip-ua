@@ -117,7 +117,7 @@ func (auth *Authorization) CalcResponse(request sip.Request) *Authorization {
 		auth.response = md5Hex(ha1 + ":" + auth.nonce + ":" + auth.ncHex + ":" + auth.cnonce + ":auth-int:" + ha2)
 	} else {
 		// HA2 = MD5(A2) = MD5(method:digestURI).
-		ha2 := md5Hex(auth.method) + ":" + auth.uri
+		ha2 := md5Hex(auth.method + ":" + auth.uri)
 		// Response = MD5(HA1:nonce:HA2).
 		auth.response = md5Hex(ha1 + ":" + auth.nonce + ":" + ha2)
 	}
