@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/cloudwebrtc/go-sip-ua/pkg/utils"
@@ -33,6 +34,8 @@ type ServerAuthorizer struct {
 	useAuthInt        bool
 	realm             string
 	log               log.Logger
+
+	mx sync.RWMutex
 }
 
 // NewServerAuthorizer .
@@ -103,10 +106,12 @@ func (auth *ServerAuthorizer) requestAuthentication(request sip.Request, tx sip.
 	})
 
 	from.Params.Add("tag", sip.String{Str: generateNonce(8)})
+	auth.mx.Lock()
 	auth.sessions[callID.String()] = AuthSession{
 		nonce:   nonce,
 		created: time.Now(),
 	}
+	auth.mx.Unlock()
 	response.SetBody("", true)
 	tx.Respond(response)
 }
@@ -119,7 +124,9 @@ func (auth *ServerAuthorizer) checkAuthorization(request sip.Request, tx sip.Ser
 		return "", false
 	}
 
+	auth.mx.RLock()
 	session, found := auth.sessions[callID.String()]
+	auth.mx.RUnlock()
 	if !found {
 		auth.requestAuthentication(request, tx, from)
 		return "", false
