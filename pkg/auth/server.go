@@ -14,6 +14,10 @@ import (
 	"github.com/ghettovoice/gosip/sip"
 )
 
+const (
+	NonceExpire = 180 * time.Second
+)
+
 var (
 	logger log.Logger
 )
@@ -47,6 +51,17 @@ func NewServerAuthorizer(callback RequestCredentialCallback, realm string, authI
 		realm:             realm,
 	}
 	auth.log = utils.NewLogrusLogger(log.DebugLevel, "ServerAuthorizer", nil)
+	go func() {
+		for now := range time.Tick(NonceExpire) {
+			auth.mx.Lock()
+			for k, v := range auth.sessions {
+				if now.After(v.created.Add(180 * time.Second)) {
+					delete(auth.sessions, k)
+				}
+			}
+			auth.mx.Unlock()
+		}
+	}()
 	return auth
 }
 
@@ -128,6 +143,11 @@ func (auth *ServerAuthorizer) checkAuthorization(request sip.Request, tx sip.Ser
 	session, found := auth.sessions[callID.String()]
 	auth.mx.RUnlock()
 	if !found {
+		auth.requestAuthentication(request, tx, from)
+		return "", false
+	}
+
+	if time.Now().After(session.created.Add(NonceExpire)) {
 		auth.requestAuthentication(request, tx, from)
 		return "", false
 	}
