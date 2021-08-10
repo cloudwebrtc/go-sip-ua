@@ -124,9 +124,11 @@ func consoleLoop(b2bua *b2bua.B2BUA) {
 
 func main() {
 	noconsole := false
+	disableAuth := false
 	h := false
 	flag.BoolVar(&h, "h", false, "this help")
 	flag.BoolVar(&noconsole, "nc", false, "no console mode")
+	flag.BoolVar(&disableAuth, "da", false, "disable auth mode")
 	flag.Usage = usage
 
 	flag.Parse()
@@ -140,11 +142,11 @@ func main() {
 	signal.Notify(stop, syscall.SIGTERM, syscall.SIGINT)
 
 	go func() {
-		fmt.Print("Start pprof on :6655\n")
-		http.ListenAndServe(":6655", nil)
+		fmt.Print("Start pprof on :6658\n")
+		http.ListenAndServe(":6658", nil)
 	}()
 
-	b2bua := b2bua.NewB2BUA()
+	b2bua := b2bua.NewB2BUA(disableAuth)
 
 	// Add sample accounts.
 	b2bua.AddAccount("100", "100")

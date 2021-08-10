@@ -62,11 +62,17 @@ func init() {
 }
 
 //NewB2BUA .
-func NewB2BUA() *B2BUA {
+func NewB2BUA(disableAuth bool) *B2BUA {
 	b := &B2BUA{
 		registry: registry.Registry(registry.NewMemoryRegistry()),
 		accounts: make(map[string]string),
 		rfc8599:  registry.NewRFC8599(pushCallback),
+	}
+
+	var authenticator *auth.ServerAuthorizer = nil
+
+	if !disableAuth {
+		authenticator = auth.NewServerAuthorizer(b.requestCredential, "b2bua", false)
 	}
 
 	stack := stack.NewSipStack(&stack.SipStackConfig{
@@ -74,7 +80,7 @@ func NewB2BUA() *B2BUA {
 		Extensions: []string{"replaces", "outbound"},
 		Dns:        "8.8.8.8",
 		ServerAuthManager: stack.ServerAuthManager{
-			Authenticator:     auth.NewServerAuthorizer(b.requestCredential, "b2bua", false),
+			Authenticator:     authenticator,
 			RequiresChallenge: b.requiresChallenge,
 		},
 	})
