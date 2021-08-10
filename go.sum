@@ -74,6 +74,8 @@ github.com/ghettovoice/gosip v0.0.0-20210520124801-4622d3f142e4 h1:lBxyiXQmXJ5Gq
 github.com/ghettovoice/gosip v0.0.0-20210520124801-4622d3f142e4/go.mod h1:yTr3BEYSFe9As6XM7ldyrVgqsPwlnw8Ahc4N28VFM2g=
 github.com/ghettovoice/gosip v0.0.0-20210615141441-6aacd91ab132 h1:jZ6bY8ceBMkx4SAWhlIMXtn8IC6PFsdLnkBmIP/S0GE=
 github.com/ghettovoice/gosip v0.0.0-20210615141441-6aacd91ab132/go.mod h1:yTr3BEYSFe9As6XM7ldyrVgqsPwlnw8Ahc4N28VFM2g=
+github.com/ghettovoice/gosip v0.0.0-20210621140811-94442dfb3c1d h1:5b8nxjMgOw41/lNDvVR7IzMotkCZLH7L369RkFPi15k=
+github.com/ghettovoice/gosip v0.0.0-20210621140811-94442dfb3c1d/go.mod h1:yTr3BEYSFe9As6XM7ldyrVgqsPwlnw8Ahc4N28VFM2g=
 github.com/go-gl/glfw v0.0.0-20190409004039-e6da0acd62b1/go.mod h1:vR7hzQXu2zJy9AVAgeJqvqgH9Q5CA+iKCZ2gyEVpxRU=
 github.com/go-gl/glfw/v3.3/glfw v0.0.0-20191125211704-12ad95a8df72/go.mod h1:tQ2UAYgL5IevRw8kRxooKSPJfGvJ9fJQFa0TUsXzTg8=
 github.com/go-gl/glfw/v3.3/glfw v0.0.0-20200222043503-6f7a984d4dc4/go.mod h1:tQ2UAYgL5IevRw8kRxooKSPJfGvJ9fJQFa0TUsXzTg8=

@@ -6,11 +6,16 @@ import (
 	"math/rand"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/cloudwebrtc/go-sip-ua/pkg/utils"
 	"github.com/ghettovoice/gosip/log"
 	"github.com/ghettovoice/gosip/sip"
+)
+
+const (
+	NonceExpire = 180 * time.Second
 )
 
 var (
@@ -33,6 +38,8 @@ type ServerAuthorizer struct {
 	useAuthInt        bool
 	realm             string
 	log               log.Logger
+
+	mx sync.RWMutex
 }
 
 // NewServerAuthorizer .
@@ -44,6 +51,17 @@ func NewServerAuthorizer(callback RequestCredentialCallback, realm string, authI
 		realm:             realm,
 	}
 	auth.log = utils.NewLogrusLogger(log.DebugLevel, "ServerAuthorizer", nil)
+	go func() {
+		for now := range time.Tick(NonceExpire) {
+			auth.mx.Lock()
+			for k, v := range auth.sessions {
+				if now.After(v.created.Add(180 * time.Second)) {
+					delete(auth.sessions, k)
+				}
+			}
+			auth.mx.Unlock()
+		}
+	}()
 	return auth
 }
 
@@ -103,10 +121,12 @@ func (auth *ServerAuthorizer) requestAuthentication(request sip.Request, tx sip.
 	})
 
 	from.Params.Add("tag", sip.String{Str: generateNonce(8)})
+	auth.mx.Lock()
 	auth.sessions[callID.String()] = AuthSession{
 		nonce:   nonce,
 		created: time.Now(),
 	}
+	auth.mx.Unlock()
 	response.SetBody("", true)
 	tx.Respond(response)
 }
@@ -119,8 +139,15 @@ func (auth *ServerAuthorizer) checkAuthorization(request sip.Request, tx sip.Ser
 		return "", false
 	}
 
+	auth.mx.RLock()
 	session, found := auth.sessions[callID.String()]
+	auth.mx.RUnlock()
 	if !found {
+		auth.requestAuthentication(request, tx, from)
+		return "", false
+	}
+
+	if time.Now().After(session.created.Add(NonceExpire)) {
 		auth.requestAuthentication(request, tx, from)
 		return "", false
 	}
