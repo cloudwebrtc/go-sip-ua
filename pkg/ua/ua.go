@@ -126,6 +126,10 @@ func (ua *UserAgent) SendRegister(profile *account.Profile, recipient sip.SipUri
 }
 
 func (ua *UserAgent) Invite(profile *account.Profile, target sip.Uri, recipient sip.SipUri, body *string) (*session.Session, error) {
+	return ua.InviteWithContext(context.TODO(), profile, target, recipient, body)
+}
+
+func (ua *UserAgent) InviteWithContext(ctx context.Context, profile *account.Profile, target sip.Uri, recipient sip.SipUri, body *string) (*session.Session, error) {
 
 	from := &sip.Address{
 		DisplayName: sip.String{Str: profile.DisplayName},
@@ -156,7 +160,7 @@ func (ua *UserAgent) Invite(profile *account.Profile, target sip.Uri, recipient 
 		authorizer = auth.NewClientAuthorizer(profile.AuthInfo.AuthUser, profile.AuthInfo.Password)
 	}
 
-	resp, err := ua.RequestWithContext(context.TODO(), *request, authorizer, false, 1)
+	resp, err := ua.RequestWithContext(ctx, *request, authorizer, false, 1)
 	if err != nil {
 		ua.Log().Errorf("INVITE: Request [INVITE] failed, err => %v", err)
 		return nil, err
