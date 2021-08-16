@@ -136,21 +136,21 @@ func (auth *Authorization) String() string {
 	)
 
 	if auth.domain != "" {
-		digest += fmt.Sprintf(`domain="%s"`, auth.domain)
+		digest += fmt.Sprintf(`,domain="%s"`, auth.domain)
 	}
 
 	if auth.opaque != "" {
-		digest += fmt.Sprintf(`opaque="%s"`, auth.opaque)
+		digest += fmt.Sprintf(`,opaque="%s"`, auth.opaque)
 	}
 
 	if auth.qop != "" {
-		digest += fmt.Sprintf(`qop="%s"`, auth.qop)
-		digest += fmt.Sprintf(`cnonce="%s"`, auth.cnonce)
-		digest += fmt.Sprintf(`nc="%s"`, auth.ncHex)
+		digest += fmt.Sprintf(`,qop="%s"`, auth.qop)
+		digest += fmt.Sprintf(`,cnonce="%s"`, auth.cnonce)
+		digest += fmt.Sprintf(`,nc="%s"`, auth.ncHex)
 	}
 
 	if len(auth.stale) > 0 {
-		digest += fmt.Sprintf(`stale=%s`, auth.stale)
+		digest += fmt.Sprintf(`,stale=%s`, auth.stale)
 	}
 
 	return digest
