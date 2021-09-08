@@ -252,21 +252,6 @@ func (s *SipStack) handleRequest(req sip.Request, tx sip.ServerTransaction) {
 	if !ok {
 		logger.Warnf("SIP request %v handler not found", req.Method())
 
-		go func(tx sip.ServerTransaction, logger log.Logger) {
-			for {
-				select {
-				case <-s.tx.Done():
-					return
-				case err, ok := <-tx.Errors():
-					if !ok {
-						return
-					}
-
-					logger.Warnf("error from SIP server transaction %s: %s", tx, err)
-				}
-			}
-		}(tx, logger)
-
 		res := sip.NewResponseFromRequest("", req, 405, "Method Not Allowed", "")
 		if _, err := s.Respond(res); err != nil {
 			logger.Errorf("respond '405 Method Not Allowed' failed: %s", err)
