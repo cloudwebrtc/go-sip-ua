@@ -53,6 +53,7 @@ func NewUserAgent(config *UserAgentConfig) *UserAgent {
 	stack.OnRequest(sip.ACK, ua.handleACK)
 	stack.OnRequest(sip.BYE, ua.handleBye)
 	stack.OnRequest(sip.CANCEL, ua.handleCancel)
+	stack.OnRequest(sip.UPDATE, ua.handleUpdate)
 	return ua
 }
 
@@ -246,7 +247,6 @@ func (ua *UserAgent) handleCancel(request sip.Request, tx sip.ServerTransaction)
 }
 
 func (ua *UserAgent) handleACK(request sip.Request, tx sip.ServerTransaction) {
-
 	ua.Log().Debugf("handleACK => %s, body => %s", request.Short(), request.Body())
 	callID, ok := request.CallID()
 	if ok {
@@ -304,6 +304,12 @@ func (ua *UserAgent) handleInvite(request sip.Request, tx sip.ServerTransaction)
 			ua.Log().Debugf("ack => %v", ack)
 		}
 	}()
+}
+
+func (ua *UserAgent) handleUpdate(request sip.Request, tx sip.ServerTransaction) {
+	ua.Log().Debugf("handleUpdate: Request => %s", request.Short())
+	response := sip.NewResponseFromRequest(request.MessageID(), request, 200, "OK", "")
+	tx.Respond(response)
 }
 
 // RequestWithContext .
