@@ -392,6 +392,7 @@ func (s *Session) makeRequest(uaType string, method sip.RequestMethod, msgID sip
 		}
 		newRequest.SetDestination(inviteResponse.Destination())
 		newRequest.SetSource(inviteResponse.Source())
+		newRequest.SetRecipient(to.Address)
 	}
 
 	maxForwardsHeader := sip.MaxForwards(70)
