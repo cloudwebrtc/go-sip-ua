@@ -81,6 +81,14 @@ func (s *Session) String() string {
 	return "Local: " + s.localURI.String() + ", Remote: " + s.remoteURI.String()
 }
 
+func (s *Session) LocalURI() sip.Address {
+	return s.localURI
+}
+
+func (s *Session) RemoteURI() sip.Address {
+	return s.remoteURI
+}
+
 func (s *Session) LocalSdp() string {
 	if s.uaType == "UAC" {
 		return s.offer
