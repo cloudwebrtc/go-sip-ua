@@ -46,7 +46,7 @@ func NewInviteSession(reqcb RequestCallback, uaType string,
 		contact:        contact,
 	}
 
-	s.logger = utils.NewLogrusLogger(log.DebugLevel, "Session", nil)
+	s.logger = utils.NewLogrusLogger(log.InfoLevel, "Session", nil)
 
 	to, _ := req.To()
 	from, _ := req.From()
@@ -324,6 +324,12 @@ func (s *Session) Accept(statusCode sip.StatusCode) {
 		sip.CopyHeaders("Content-Type", request, response)
 	}
 
+	//jktodo
+	olddest := response.Destination()
+	dest := fmt.Sprintf("%v:%v", "18.166.158.79", 5066)
+	response.SetDestination(dest)
+	fmt.Printf("handleInvite 2 === old dest: => %s, new dest: %s, ===\n\n ", olddest, dest)
+
 	response.AppendHeader(s.localURI.AsContactHeader())
 	response.SetBody(s.answer, true)
 
@@ -399,6 +405,13 @@ func (s *Session) makeRequest(uaType string, method sip.RequestMethod, msgID sip
 			sip.CopyHeaders("Route", inviteResponse, newRequest)
 		}
 		newRequest.SetDestination(inviteResponse.Destination())
+
+		//jktodo
+		olddest := inviteResponse.Destination()
+		dest := fmt.Sprintf("%v:%v", "18.166.158.79", 5066)
+		newRequest.SetDestination(dest)
+		fmt.Printf("handleInvite 1 === old dest: => %s, new dest: %s, ===\n\n ", olddest, dest)
+
 		newRequest.SetSource(inviteResponse.Source())
 		newRequest.SetRecipient(to.Address)
 	}

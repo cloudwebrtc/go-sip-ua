@@ -78,7 +78,7 @@ func NewSipStack(config *SipStackConfig) *SipStack {
 		config = &SipStackConfig{}
 	}
 
-	logger := utils.NewLogrusLogger(log.DebugLevel, "SipStack", nil)
+	logger := utils.NewLogrusLogger(log.InfoLevel, "SipStack", nil)
 
 	var host string
 	var ip net.IP
@@ -134,12 +134,12 @@ func NewSipStack(config *SipStackConfig) *SipStack {
 	}
 
 	s.log = logger
-	s.tp = transport.NewLayer(ip, dnsResolver, config.MsgMapper, utils.NewLogrusLogger(log.DebugLevel, "transport.Layer", nil))
+	s.tp = transport.NewLayer(ip, dnsResolver, config.MsgMapper, utils.NewLogrusLogger(log.WarnLevel, "transport.Layer", nil))
 	sipTp := &sipTransport{
 		tpl: s.tp,
 		s:   s,
 	}
-	s.tx = transaction.NewLayer(sipTp, utils.NewLogrusLogger(log.DebugLevel, "transaction.Layer", nil))
+	s.tx = transaction.NewLayer(sipTp, utils.NewLogrusLogger(log.WarnLevel, "transaction.Layer", nil))
 
 	s.running.Set()
 	go s.serve()
@@ -241,6 +241,9 @@ func (s *SipStack) serve() {
 
 func (s *SipStack) handleRequest(req sip.Request, tx sip.ServerTransaction) {
 	defer s.hwg.Done()
+
+	//jktodo
+	s.Log().Infof("SIP-b [recv:]\n%s\n", req.String())
 
 	logger := s.Log().WithFields(req.Fields())
 	logger.Debugf("routing incoming SIP request...")
@@ -424,6 +427,9 @@ func (s *SipStack) Send(msg sip.Message) error {
 	if !s.running.IsSet() {
 		return fmt.Errorf("can not send through stopped server")
 	}
+
+	//jktodo
+	s.Log().Infof("SIP-d [recv:]\n%s\n", msg.String())
 
 	switch m := msg.(type) {
 	case sip.Request:

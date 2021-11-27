@@ -50,7 +50,7 @@ func NewServerAuthorizer(callback RequestCredentialCallback, realm string, authI
 		useAuthInt:        authInt,
 		realm:             realm,
 	}
-	auth.log = utils.NewLogrusLogger(log.DebugLevel, "ServerAuthorizer", nil)
+	auth.log = utils.NewLogrusLogger(log.InfoLevel, "ServerAuthorizer", nil)
 	go func() {
 		for now := range time.Tick(NonceExpire) {
 			auth.mx.Lock()
