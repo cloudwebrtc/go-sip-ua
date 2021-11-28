@@ -243,7 +243,7 @@ func (s *SipStack) handleRequest(req sip.Request, tx sip.ServerTransaction) {
 	defer s.hwg.Done()
 
 	//jktodo
-	s.Log().Infof("SIP-b [recv:]\n%s\n", req.String())
+	s.Log().Infof("SIP-b [recv req:]\n%s\n", req.String())
 
 	logger := s.Log().WithFields(req.Fields())
 	logger.Debugf("routing incoming SIP request...")
@@ -429,7 +429,7 @@ func (s *SipStack) Send(msg sip.Message) error {
 	}
 
 	//jktodo
-	s.Log().Infof("SIP-d [recv:]\n%s\n", msg.String())
+	s.Log().Infof("SIP-d [send:]\n%s\n", msg.String())
 
 	switch m := msg.(type) {
 	case sip.Request:
