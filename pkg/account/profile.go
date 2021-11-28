@@ -16,7 +16,7 @@ var (
 )
 
 func init() {
-	logger = utils.NewLogrusLogger(log.DebugLevel, "UserAgent", nil)
+	logger = utils.NewLogrusLogger(log.InfoLevel, "UserAgent", nil)
 }
 
 //AuthInfo .

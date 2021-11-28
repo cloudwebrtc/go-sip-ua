@@ -46,7 +46,7 @@ func NewUserAgent(config *UserAgentConfig) *UserAgent {
 		iss:                  sync.Map{},
 		InviteStateHandler:   nil,
 		RegisterStateHandler: nil,
-		log:                  utils.NewLogrusLogger(log.DebugLevel, "UserAgent", nil),
+		log:                  utils.NewLogrusLogger(log.InfoLevel, "UserAgent", nil),
 	}
 	stack := config.SipStack
 	stack.OnRequest(sip.INVITE, ua.handleInvite)
@@ -394,6 +394,8 @@ func (ua *UserAgent) RequestWithContext(ctx context.Context, request sip.Request
 					errs <- sip.NewRequestError(487, "Request Terminated", request, lastResponse)
 					return
 				}
+				//jktodo
+				s.Log().Infof("SIP-e [recv:]\n%s\n", response.String())
 
 				response = sip.CopyResponse(response)
 				lastResponse = response
