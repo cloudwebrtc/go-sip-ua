@@ -258,7 +258,7 @@ func (s *Session) Reject(statusCode sip.StatusCode, reason string) {
 	request := s.request
 	s.Log().Debugf("Reject: Request => %s, body => %s", request.Short(), request.Body())
 	response := sip.NewResponseFromRequest(request.MessageID(), request, statusCode, reason, "")
-	response.AppendHeader(s.localURI.AsContactHeader())
+	response.AppendHeader(s.contact)
 	tx.Respond(response)
 }
 
@@ -324,7 +324,7 @@ func (s *Session) Accept(statusCode sip.StatusCode) {
 		sip.CopyHeaders("Content-Type", request, response)
 	}
 
-	response.AppendHeader(s.localURI.AsContactHeader())
+	response.AppendHeader(s.contact)
 	response.SetBody(s.answer, true)
 
 	s.response = response
@@ -356,7 +356,8 @@ func (s *Session) Provisional(statusCode sip.StatusCode, reason string) {
 	} else {
 		response = sip.NewResponseFromRequest(request.MessageID(), request, statusCode, reason, "")
 	}
-	response.AppendHeader(s.localURI.AsContactHeader())
+	response.AppendHeader(s.contact)
+
 	s.response = response
 	tx.Respond(response)
 }
@@ -381,20 +382,13 @@ func (s *Session) makeRequest(uaType string, method sip.RequestMethod, msgID sip
 	newRequest.AppendHeader(to)
 	newRequest.SetRecipient(s.request.Recipient())
 	sip.CopyHeaders("Via", inviteRequest, newRequest)
+	newRequest.AppendHeader(s.contact)
 
 	if uaType == "UAC" {
-		if contact, ok := s.request.Contact(); ok {
-			newRequest.AppendHeader(contact)
-		}
-
 		if len(inviteRequest.GetHeaders("Route")) > 0 {
 			sip.CopyHeaders("Route", inviteRequest, newRequest)
 		}
 	} else if uaType == "UAS" {
-		if contact, ok := s.response.Contact(); ok {
-			newRequest.AppendHeader(contact)
-		}
-
 		if len(inviteResponse.GetHeaders("Route")) > 0 {
 			sip.CopyHeaders("Route", inviteResponse, newRequest)
 		}
