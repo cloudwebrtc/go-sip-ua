@@ -201,12 +201,12 @@ func (ua *UserAgent) handleBye(request sip.Request, tx sip.ServerTransaction) {
 			if received, ok := viaHop.Params.Get("received"); ok && received.String() != "" {
 				host = received.String()
 			}
-			if rport, ok := viaHop.Params.Get("rport"); ok && rport != nil && rport.String() != "" {
+			if viaHop.Port != nil {
+				port = *viaHop.Port
+			} else if rport, ok := viaHop.Params.Get("rport"); ok && rport != nil && rport.String() != "" {
 				if p, err := strconv.Atoi(rport.String()); err == nil {
 					port = sip.Port(uint16(p))
 				}
-			} else if request.Recipient().Port() != nil {
-				port = *request.Recipient().Port()
 			} else {
 				port = sip.DefaultPort(request.Transport())
 			}
@@ -271,8 +271,11 @@ func (ua *UserAgent) handleInvite(request sip.Request, tx sip.ServerTransaction)
 			is.SetState(session.ReInviteReceived)
 			ua.handleInviteState(is, &request, nil, session.ReInviteReceived, &transaction)
 		} else {
-			contact, _ := request.Contact()
-			is := session.NewInviteSession(ua.RequestWithContext, "UAS", contact, request, *callID, transaction, session.Incoming, ua.Log())
+			contactHdr, _ := request.Contact()
+			contactAddr := ua.updateContact2UAAddr(request.Transport(), contactHdr.Address)
+			contactHdr.Address = contactAddr
+
+			is := session.NewInviteSession(ua.RequestWithContext, "UAS", contactHdr, request, *callID, transaction, session.Incoming, ua.Log())
 			ua.iss.Store(*callID, is)
 			is.SetState(session.InviteReceived)
 			ua.handleInviteState(is, &request, nil, session.InviteReceived, &transaction)
@@ -322,12 +325,12 @@ func (ua *UserAgent) RequestWithContext(ctx context.Context, request sip.Request
 	var cts sip.Transaction = tx.(sip.Transaction)
 
 	if request.IsInvite() {
-		callID, ok := request.CallID()
-		if ok {
-
+		if callID, ok := request.CallID(); ok {
 			if _, found := ua.iss.Load(*callID); !found {
-				contact, _ := request.Contact()
-				is := session.NewInviteSession(ua.RequestWithContext, "UAC", contact, request, *callID, cts, session.Outgoing, ua.Log())
+				contactHdr, _ := request.Contact()
+				contactAddr := ua.updateContact2UAAddr(request.Transport(), contactHdr.Address)
+				contactHdr.Address = contactAddr
+				is := session.NewInviteSession(ua.RequestWithContext, "UAC", contactHdr, request, *callID, cts, session.Outgoing, ua.Log())
 				ua.iss.Store(*callID, is)
 				is.ProvideOffer(request.Body())
 				is.SetState(session.InviteSent)
@@ -515,4 +518,12 @@ func (ua *UserAgent) RequestWithContext(ctx context.Context, request sip.Request
 
 func (ua *UserAgent) Shutdown() {
 	ua.config.SipStack.Shutdown()
+}
+
+func (ua *UserAgent) updateContact2UAAddr(transport string, from sip.ContactUri) sip.ContactUri {
+	stackAddr := ua.config.SipStack.GetNetworkInfo(transport)
+	ret := from.Clone()
+	ret.SetHost(stackAddr.Host)
+	ret.SetPort(stackAddr.Port)
+	return ret
 }
