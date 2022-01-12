@@ -16,8 +16,8 @@ var (
 	ErrPort       = errors.New("invalid port")
 )
 
-func GetBranchID(request sip.Request) sip.MaybeString {
-	if viaHop, ok := request.ViaHop(); ok {
+func GetBranchID(msg sip.Message) sip.MaybeString {
+	if viaHop, ok := msg.ViaHop(); ok {
 		if branch, ok := viaHop.Params.Get("branch"); ok {
 			return branch
 		}

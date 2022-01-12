@@ -492,7 +492,7 @@ func (ua *UserAgent) RequestWithContext(ctx context.Context, request sip.Request
 			case provisional := <-provisionals:
 				callID, ok := provisional.CallID()
 				if ok {
-					branchID := utils.GetBranchID(provisional.(sip.Request))
+					branchID := utils.GetBranchID(provisional)
 					if v, found := ua.iss.Load(NewSessionKey(*callID, branchID)); found {
 						is := v.(*session.Session)
 						is.StoreResponse(provisional)
@@ -527,7 +527,7 @@ func (ua *UserAgent) RequestWithContext(ctx context.Context, request sip.Request
 			case response := <-responses:
 				callID, ok := response.CallID()
 				if ok {
-					branchID := utils.GetBranchID(response.(sip.Request))
+					branchID := utils.GetBranchID(response)
 					if v, found := ua.iss.Load(NewSessionKey(*callID, branchID)); found {
 						if request.IsInvite() {
 							is := v.(*session.Session)
