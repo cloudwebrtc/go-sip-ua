@@ -362,8 +362,6 @@ func (s *Session) Provisional(statusCode sip.StatusCode, reason string) {
 }
 
 func (s *Session) makeRequest(uaType string, method sip.RequestMethod, msgID sip.MessageID, inviteRequest sip.Request, inviteResponse sip.Response) sip.Request {
-	var rh *sip.RouteHeader
-
 	newRequest := sip.NewRequest(
 		msgID,
 		method,
@@ -389,12 +387,12 @@ func (s *Session) makeRequest(uaType string, method sip.RequestMethod, msgID sip
 		for _, header := range s.response.Headers() {
 			if header.Name() == "Record-Route" {
 				h := header.(*sip.RecordRouteHeader)
-				rh = &sip.RouteHeader{
+				rh := &sip.RouteHeader{
 					Addresses: h.Addresses,
 				}
+				newRequest.AppendHeader(rh)
 			}
 		}
-		newRequest.AppendHeader(rh)
 		if len(inviteRequest.GetHeaders("Route")) > 0 {
 			sip.CopyHeaders("Route", inviteRequest, newRequest)
 		}
