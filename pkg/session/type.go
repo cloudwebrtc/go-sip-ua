@@ -1,7 +1,12 @@
 package session
 
+import (
+	"github.com/ghettovoice/gosip/sip"
+)
+
+
 // ReasonPhrase .
-var ReasonPhrase = map[uint16]string{
+var ReasonPhrase = map[sip.StatusCode]string{
 	100: "Trying",
 	180: "Ringing",
 	181: "Call Is Being Forwarded",
