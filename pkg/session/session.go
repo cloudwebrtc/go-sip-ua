@@ -341,9 +341,8 @@ func (s *Session) Redirect(target string, code sip.StatusCode) {
 func (s *Session) Provisional(statusCode sip.StatusCode, reason string) {
 	tx := (s.transaction.(sip.ServerTransaction))
 	request := s.request
-	var response sip.Response
+	response := sip.NewResponseFromRequest(request.MessageID(), request, statusCode, reason, s.answer)
 	if len(s.answer) > 0 {
-		response = sip.NewResponseFromRequest(request.MessageID(), request, statusCode, reason, s.answer)
 		hdrs := response.GetHeaders("Content-Type")
 		if len(hdrs) == 0 {
 			contentType := sip.ContentType("application/sdp")
@@ -352,8 +351,6 @@ func (s *Session) Provisional(statusCode sip.StatusCode, reason string) {
 			sip.CopyHeaders("Content-Type", request, response)
 		}
 		response.SetBody(s.answer, true)
-	} else {
-		response = sip.NewResponseFromRequest(request.MessageID(), request, statusCode, reason, "")
 	}
 	response.AppendHeader(s.contact)
 
