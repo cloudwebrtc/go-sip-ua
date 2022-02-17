@@ -29,7 +29,7 @@ type SessionKey struct {
 func NewSessionKey(callID sip.CallID, branchID sip.MaybeString) SessionKey {
 	return SessionKey{
 		CallID:   callID,
-		BranchID: branchID,
+		BranchID: sip.String{},
 	}
 }
 
