@@ -269,13 +269,6 @@ func (s *Session) Reject(statusCode sip.StatusCode, reason string) {
 
 //End end session
 func (s *Session) End() error {
-
-	if s.status == Terminated {
-		err := fmt.Errorf("invalid status: %v", s.status)
-		s.Log().Errorf("Session::End() %v", err)
-		return err
-	}
-
 	switch s.status {
 	// - UAC -
 	case InviteSent:
@@ -305,7 +298,16 @@ func (s *Session) End() error {
 	case Confirmed:
 		s.Log().Info("Terminating session.")
 		s.Bye()
+
+	case Terminated:
+		s.Log().Info("Session already terminated")
+
+	default:
+		err := fmt.Errorf("invalid status: %v", s.status)
+		s.Log().Errorf("Session::End() %v", err)
+		return err
 	}
+
 
 	return nil
 }
