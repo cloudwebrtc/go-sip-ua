@@ -352,6 +352,9 @@ func (s *Session) Provisional(statusCode sip.StatusCode, reason string) {
 		}
 		response.SetBody(s.answer, true)
 	}
+	if statusCode == 100 {
+		response.GetHeaders("To")[0].(*sip.ToHeader).Params.Remove("tag")
+	}
 	response.AppendHeader(s.contact)
 
 	s.response = response
