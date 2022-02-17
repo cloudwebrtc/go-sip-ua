@@ -99,6 +99,7 @@ const (
 	Canceled         Status = "Canceled"
 	Confirmed        Status = "Confirmed"  /**< After ACK s sent/received. */
 	Failure          Status = "Failure"    /**< Session s rejected or canceled. */
+	TimedOut         Status = "TimedOut" /**< Session s timed out. */
 	Terminated       Status = "Terminated" /**< Session s terminated. */
 )
 

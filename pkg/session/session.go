@@ -155,6 +155,8 @@ func (s *Session) IsEnded() bool {
 		fallthrough
 	case Canceled:
 		fallthrough
+	case TimedOut:
+		fallthrough
 	case Terminated:
 		return true
 	default:
