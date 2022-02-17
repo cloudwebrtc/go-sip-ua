@@ -257,7 +257,6 @@ func (ua *UserAgent) handleCancel(request sip.Request, tx sip.ServerTransaction)
 			is := v.(*session.Session)
 			ua.iss.Delete(NewSessionKey(*callID, branchID))
 			var transaction sip.Transaction = tx.(sip.Transaction)
-			is.SetState(session.Canceled)
 			ua.handleInviteState(is, &request, nil, session.Canceled, &transaction)
 		}
 	}
@@ -271,7 +270,6 @@ func (ua *UserAgent) handleACK(request sip.Request, tx sip.ServerTransaction) {
 		if v, found := ua.iss.Load(NewSessionKey(*callID, branchID)); found {
 			// handle Ringing or Processing with sdp
 			is := v.(*session.Session)
-			is.SetState(session.Confirmed)
 			ua.handleInviteState(is, &request, nil, session.Confirmed, nil)
 		}
 	}
@@ -289,7 +287,6 @@ func (ua *UserAgent) handleInvite(request sip.Request, tx sip.ServerTransaction)
 		if toHdr, ok := request.To(); ok && toHdr.Params.Has("tag") {
 			if found {
 				is := v.(*session.Session)
-				is.SetState(session.ReInviteReceived)
 				ua.handleInviteState(is, &request, nil, session.ReInviteReceived, &transaction)
 			} else {
 				// reinvite for transaction we have no record of; reject it
@@ -308,7 +305,6 @@ func (ua *UserAgent) handleInvite(request sip.Request, tx sip.ServerTransaction)
 
 				is := session.NewInviteSession(ua.RequestWithContext, "UAS", contactHdr, request, *callID, transaction, session.Incoming, ua.Log())
 				ua.iss.Store(NewSessionKey(*callID, branchID), is)
-				is.SetState(session.InviteReceived)
 				ua.handleInviteState(is, &request, nil, session.InviteReceived, &transaction)
 				is.SetState(session.WaitingForAnswer)
 			}
@@ -325,7 +321,6 @@ func (ua *UserAgent) handleInvite(request sip.Request, tx sip.ServerTransaction)
 				if v, found := ua.iss.Load(NewSessionKey(*callID, branchID)); found {
 					ua.iss.Delete(NewSessionKey(*callID, branchID))
 					is := v.(*session.Session)
-					is.SetState(session.Canceled)
 					ua.handleInviteState(is, &request, &response, session.Canceled, nil)
 				}
 			}
@@ -367,7 +362,6 @@ func (ua *UserAgent) RequestWithContext(ctx context.Context, request sip.Request
 				is := session.NewInviteSession(ua.RequestWithContext, "UAC", contactHdr, request, *callID, cts, session.Outgoing, ua.Log())
 				ua.iss.Store(NewSessionKey(*callID, branchID), is)
 				is.ProvideOffer(request.Body())
-				is.SetState(session.InviteSent)
 				ua.handleInviteState(is, &request, nil, session.InviteSent, &cts)
 			}
 		}
@@ -499,7 +493,6 @@ func (ua *UserAgent) RequestWithContext(ctx context.Context, request sip.Request
 						// handle Ringing or Processing with sdp
 						ua.handleInviteState(is, &request, &provisional, session.Provisional, cts)
 						if len(provisional.Body()) > 0 {
-							is.SetState(session.EarlyMedia)
 							ua.handleInviteState(is, &request, &provisional, session.EarlyMedia, cts)
 						}
 					}
@@ -521,7 +514,6 @@ func (ua *UserAgent) RequestWithContext(ctx context.Context, request sip.Request
 					if v, found := ua.iss.Load(NewSessionKey(*callID, branchID)); found {
 						is := v.(*session.Session)
 						ua.iss.Delete(NewSessionKey(*callID, branchID))
-						is.SetState(status)
 						ua.handleInviteState(is, &request, &response, status, nil)
 					}
 				}
@@ -533,12 +525,10 @@ func (ua *UserAgent) RequestWithContext(ctx context.Context, request sip.Request
 					if v, found := ua.iss.Load(NewSessionKey(*callID, branchID)); found {
 						if request.IsInvite() {
 							is := v.(*session.Session)
-							is.SetState(session.Confirmed)
 							ua.handleInviteState(is, &request, &response, session.Confirmed, nil)
 						} else if request.Method() == sip.BYE {
 							is := v.(*session.Session)
 							ua.iss.Delete(NewSessionKey(*callID, branchID))
-							is.SetState(session.Terminated)
 							ua.handleInviteState(is, &request, &response, session.Terminated, nil)
 						}
 					}
