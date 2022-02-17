@@ -14,7 +14,7 @@ import (
 type RequestCallback func(ctx context.Context, request sip.Request, authorizer sip.Authorizer, waitForResult bool, attempt int) (sip.Response, error)
 
 type Session struct {
-	lock           sync.Mutex
+	lock           sync.RWMutex
 	requestCallbck RequestCallback
 	status         Status
 	callID         sip.CallID
@@ -196,8 +196,8 @@ func (s *Session) SetState(status Status) {
 }
 
 func (s *Session) Status() Status {
-	s.lock.Lock()
-	defer s.lock.Unlock()
+	s.lock.RLock()
+	defer s.lock.RUnlock()
 	return s.status
 }
 
