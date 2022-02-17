@@ -245,7 +245,11 @@ func (s *Session) ReInvite() {
 //Bye send Bye request.
 func (s *Session) Bye() (sip.Response, error) {
 	req := s.makeRequest(s.uaType, sip.BYE, sip.MessageID(s.callID), s.request, s.response)
-	return s.sendRequest(req)
+	resp, err := s.sendRequest(req)
+	if err == nil {
+		s.SetState(Terminated)
+	}
+	return resp, err
 }
 
 func (s *Session) sendRequest(req sip.Request) (sip.Response, error) {
