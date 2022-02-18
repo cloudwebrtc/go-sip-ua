@@ -29,6 +29,7 @@ type Session struct {
 	localURI       sip.Address
 	remoteURI      sip.Address
 	remoteTarget   sip.Uri
+	routeSet       []sip.Uri
 	logger         log.Logger
 }
 
@@ -62,6 +63,7 @@ func NewInviteSession(reqcb RequestCallback, uaType string,
 		s.remoteURI = sip.Address{Uri: from.Address, Params: from.Params}
 		s.remoteTarget = contact.Address
 		s.offer = req.Body()
+		s.StoreRouteSet(req, false)
 	} else if uaType == "UAC" {
 		s.localURI = sip.Address{Uri: from.Address, Params: from.Params}
 		s.remoteURI = sip.Address{Uri: to.Address, Params: to.Params}
@@ -164,6 +166,32 @@ func (s *Session) IsEnded() bool {
 	}
 }
 
+func (s *Session) StoreRouteSet(msg sip.Message, reverse bool) {
+	if hdrs := msg.GetHeaders("Record-Route"); len(hdrs) > 0 {
+		s.Log().Debug("Storing Route-Set")
+		l := 0
+		for _, rr := range hdrs {
+			l += len(rr.(*sip.RecordRouteHeader).Addresses)
+		}
+		rs := make([]sip.Uri, l)
+		i := 0
+		if reverse {
+			i = l-1
+		}
+		for _, rr := range hdrs {
+			for _, r := range rr.(*sip.RecordRouteHeader).Addresses {
+				rs[i] = r
+				if reverse {
+					i -= 1
+				} else {
+					i += 1
+				}
+			}
+		}
+		s.routeSet = rs
+	}
+}
+
 func (s *Session) StoreRequest(request sip.Request) {
 	s.request = request
 }
@@ -174,6 +202,15 @@ func (s *Session) StoreResponse(response sip.Response) {
 		if to.Params != nil && to.Params.Has("tag") {
 			//Update to URI.
 			s.remoteURI = sip.Address{Uri: to.Address, Params: to.Params}
+			if ct, ok:= response.Contact(); ok {
+				s.remoteTarget = ct.Address
+			}
+			if response.IsSuccess() || response.IsProvisional() {
+				if s.Status() != Confirmed && (response.Method() == sip.INVITE || response.Method() == sip.SUBSCRIBE) {
+					s.routeSet = nil
+					s.StoreRouteSet(response, true)
+				}
+			}
 		}
 
 		sdp := response.Body()
@@ -390,27 +427,8 @@ func (s *Session) makeRequest(uaType string, method sip.RequestMethod, msgID sip
 	newRequest.SetRecipient(s.request.Recipient())
 	sip.CopyHeaders("Via", inviteRequest, newRequest)
 	newRequest.AppendHeader(s.contact)
-
-	if uaType == "UAC" {
-		for _, header := range s.response.Headers() {
-			if header.Name() == "Record-Route" {
-				h := header.(*sip.RecordRouteHeader)
-				rh := &sip.RouteHeader{
-					Addresses: h.Addresses,
-				}
-				newRequest.AppendHeader(rh)
-			}
-		}
-		if len(inviteRequest.GetHeaders("Route")) > 0 {
-			sip.CopyHeaders("Route", inviteRequest, newRequest)
-		}
-	} else if uaType == "UAS" {
-		if len(inviteResponse.GetHeaders("Route")) > 0 {
-			sip.CopyHeaders("Route", inviteResponse, newRequest)
-		}
-		newRequest.SetDestination(inviteResponse.Destination())
-		newRequest.SetSource(inviteResponse.Source())
-		newRequest.SetRecipient(to.Address)
+	if len(s.routeSet) > 0 {
+		newRequest.AppendHeader(&sip.RouteHeader{Addresses: s.routeSet})
 	}
 
 	maxForwardsHeader := sip.MaxForwards(70)
