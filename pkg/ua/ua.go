@@ -80,7 +80,7 @@ func (ua *UserAgent) handleInviteState(is *session.Session, request *sip.Request
 		is.StoreRequest(*request)
 	}
 
-	if response != nil && *response != nil {
+	if response != nil && *response != nil && state != session.EarlyMedia {
 		is.StoreResponse(*response)
 	}
 
