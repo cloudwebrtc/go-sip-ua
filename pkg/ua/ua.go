@@ -420,7 +420,7 @@ func (ua *UserAgent) RequestWithContext(ctx context.Context, request sip.Request
 					}
 				}
 
-				//errs <- err
+				ua.Log().Errorf("Unhandled error: %s", err)
 				return
 			case response, ok := <-tx.Responses():
 				if !ok {
