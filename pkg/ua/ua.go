@@ -494,7 +494,6 @@ func (ua *UserAgent) RequestWithContext(ctx context.Context, request sip.Request
 					branchID := utils.GetBranchID(provisional)
 					if v, found := ua.iss.Load(NewSessionKey(*callID, branchID)); found {
 						is := v.(*session.Session)
-						is.StoreResponse(provisional)
 						// handle Ringing or Processing with sdp
 						ua.handleInviteState(is, &request, &provisional, session.Provisional, cts)
 						if len(provisional.Body()) > 0 {
