@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	"github.com/cloudwebrtc/go-sip-ua/pkg/utils"
 	"github.com/ghettovoice/gosip/log"
@@ -30,6 +31,8 @@ type Session struct {
 	remoteURI      sip.Address
 	remoteTarget   sip.Uri
 	routeSet       []sip.Uri
+	localCSeq      uint32
+	remoteCSeq     uint32
 	logger         log.Logger
 }
 
@@ -58,17 +61,21 @@ func NewInviteSession(reqcb RequestCallback, uaType string,
 		req.AppendHeader(to)
 	}
 
+	cseq, _ := req.CSeq()
+
 	if uaType == "UAS" {
 		s.localURI = sip.Address{Uri: to.Address, Params: to.Params}
 		s.remoteURI = sip.Address{Uri: from.Address, Params: from.Params}
 		s.remoteTarget = contact.Address
 		s.offer = req.Body()
 		s.StoreRouteSet(req, false)
+		s.remoteCSeq = cseq.SeqNo
 	} else if uaType == "UAC" {
 		s.localURI = sip.Address{Uri: from.Address, Params: from.Params}
 		s.remoteURI = sip.Address{Uri: to.Address, Params: to.Params}
 		s.remoteTarget = req.Recipient()
 		s.offer = req.Body()
+		s.localCSeq = cseq.SeqNo
 	}
 
 	s.request = req
@@ -111,6 +118,18 @@ func (s *Session) Contact() string {
 
 func (s *Session) CallID() *sip.CallID {
 	return &s.callID
+}
+
+func (s *Session) NextLocalCSeq() uint32 {
+	return atomic.AddUint32(&s.localCSeq, 1)
+}
+
+func (s *Session) RemoteCSeq() uint32 {
+	return atomic.LoadUint32(&s.remoteCSeq)
+}
+
+func (s *Session) SetRemoteCSeq(cseq uint32){
+	atomic.StoreUint32(&s.remoteCSeq, cseq)
 }
 
 func (s *Session) Request() sip.Request {
@@ -262,7 +281,7 @@ func (s *Session) ProvideAnswer(sdp string) {
 //Info send SIP INFO
 func (s *Session) Info(content string, contentType string) {
 	method := sip.INFO
-	req := s.makeRequest(s.uaType, method, sip.MessageID(s.callID), s.request, s.response)
+	req := s.makeRequest(method)
 	req.SetBody(content, true)
 	hdr := sip.ContentType(contentType)
 	req.AppendHeader(&hdr)
@@ -272,7 +291,7 @@ func (s *Session) Info(content string, contentType string) {
 //ReInvite send re-INVITE
 func (s *Session) ReInvite() {
 	method := sip.INVITE
-	req := s.makeRequest(s.uaType, method, sip.MessageID(s.callID), s.request, s.response)
+	req := s.makeRequest(method)
 	req.SetBody(s.offer, true)
 	hdr := sip.ContentType("application/sdp")
 	req.AppendHeader(&hdr)
@@ -281,7 +300,7 @@ func (s *Session) ReInvite() {
 
 //Bye send Bye request.
 func (s *Session) Bye() (sip.Response, error) {
-	req := s.makeRequest(s.uaType, sip.BYE, sip.MessageID(s.callID), s.request, s.response)
+	req := s.makeRequest(sip.BYE)
 	resp, err := s.sendRequest(req)
 	if err == nil {
 		s.SetState(Terminated)
@@ -406,39 +425,31 @@ func (s *Session) Provisional(statusCode sip.StatusCode, reason string) {
 	tx.Respond(response)
 }
 
-func (s *Session) makeRequest(uaType string, method sip.RequestMethod, msgID sip.MessageID, inviteRequest sip.Request, inviteResponse sip.Response) sip.Request {
+func (s *Session) makeRequest(method sip.RequestMethod) sip.Request {
+	mfwd := sip.MaxForwards(70)
+	hdrs := []sip.Header{
+		s.localURI.Clone().AsFromHeader(),
+		s.remoteURI.Clone().AsToHeader(),
+		s.contact,
+		&s.callID,
+		&sip.CSeq{SeqNo: s.NextLocalCSeq(), MethodName: method},
+		&mfwd,
+	}
+
+	msgID := sip.MessageID(s.callID)
 	newRequest := sip.NewRequest(
 		msgID,
 		method,
 		s.remoteTarget,
-		inviteRequest.SipVersion(),
-		[]sip.Header{},
+		"2.0",
+		hdrs,
 		"",
-		inviteRequest.Fields().
-			WithFields(log.Fields{
-				"invite_request_id": inviteRequest.MessageID(),
-			}),
+		log.Fields{"message_id": msgID},
 	)
 
-	from := s.localURI.Clone().AsFromHeader()
-	newRequest.AppendHeader(from)
-	to := s.remoteURI.Clone().AsToHeader()
-	newRequest.AppendHeader(to)
-	newRequest.SetRecipient(s.request.Recipient())
-	sip.CopyHeaders("Via", inviteRequest, newRequest)
-	newRequest.AppendHeader(s.contact)
 	if len(s.routeSet) > 0 {
 		newRequest.AppendHeader(&sip.RouteHeader{Addresses: s.routeSet})
 	}
-
-	maxForwardsHeader := sip.MaxForwards(70)
-	newRequest.AppendHeader(&maxForwardsHeader)
-	sip.CopyHeaders("Call-ID", inviteRequest, newRequest)
-	sip.CopyHeaders("CSeq", inviteRequest, newRequest)
-
-	cseq, _ := newRequest.CSeq()
-	cseq.SeqNo++
-	cseq.MethodName = method
 
 	return newRequest
 }
