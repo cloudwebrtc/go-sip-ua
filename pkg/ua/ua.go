@@ -102,7 +102,8 @@ func (ua *UserAgent) buildRequest(
 	contact *sip.Address,
 	recipient sip.SipUri,
 	routes []sip.Uri,
-	callID *sip.CallID) (*sip.Request, error) {
+	callID *sip.CallID,
+	headers []sip.Header) (*sip.Request, error) {
 
 	builder := sip.NewRequestBuilder()
 
@@ -118,6 +119,10 @@ func (ua *UserAgent) buildRequest(
 
 	if callID != nil {
 		builder.SetCallID(callID)
+	}
+
+	for _, h := range headers {
+		builder.AddHeader(h)
 	}
 
 	req, err := builder.Build()
@@ -140,11 +145,11 @@ func (ua *UserAgent) SendRegister(profile *account.Profile, recipient sip.SipUri
 	return register, nil
 }
 
-func (ua *UserAgent) Invite(profile *account.Profile, target sip.Uri, recipient sip.SipUri, body *string) (*session.Session, error) {
-	return ua.InviteWithContext(context.TODO(), profile, target, recipient, body)
+func (ua *UserAgent) Invite(profile *account.Profile, target sip.Uri, recipient sip.SipUri, body *string, headers []sip.Header) (*session.Session, error) {
+	return ua.InviteWithContext(context.TODO(), profile, target, recipient, body, headers)
 }
 
-func (ua *UserAgent) InviteWithContext(ctx context.Context, profile *account.Profile, target sip.Uri, recipient sip.SipUri, body *string) (*session.Session, error) {
+func (ua *UserAgent) InviteWithContext(ctx context.Context, profile *account.Profile, target sip.Uri, recipient sip.SipUri, body *string, headers []sip.Header) (*session.Session, error) {
 
 	from := &sip.Address{
 		DisplayName: sip.String{Str: profile.DisplayName},
@@ -158,7 +163,7 @@ func (ua *UserAgent) InviteWithContext(ctx context.Context, profile *account.Pro
 		Uri: target,
 	}
 
-	request, err := ua.buildRequest(sip.INVITE, from, to, contact, recipient, profile.Routes, nil)
+	request, err := ua.buildRequest(sip.INVITE, from, to, contact, recipient, profile.Routes, nil, headers)
 	if err != nil {
 		ua.Log().Errorf("INVITE: err = %v", err)
 		return nil, err
