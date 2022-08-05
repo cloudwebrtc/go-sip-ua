@@ -125,10 +125,12 @@ func consoleLoop(b2bua *b2bua.B2BUA) {
 func main() {
 	noconsole := false
 	disableAuth := false
+	enableTLS := false
 	h := false
 	flag.BoolVar(&h, "h", false, "this help")
 	flag.BoolVar(&noconsole, "nc", false, "no console mode")
 	flag.BoolVar(&disableAuth, "da", false, "disable auth mode")
+	flag.BoolVar(&enableTLS, "tls", false, "enable TLS")
 	flag.Usage = usage
 
 	flag.Parse()
@@ -146,7 +148,7 @@ func main() {
 		http.ListenAndServe(":6658", nil)
 	}()
 
-	b2bua := b2bua.NewB2BUA(disableAuth)
+	b2bua := b2bua.NewB2BUA(disableAuth, enableTLS)
 
 	// Add sample accounts.
 	b2bua.AddAccount("100", "100")

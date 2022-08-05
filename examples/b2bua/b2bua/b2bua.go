@@ -62,7 +62,7 @@ func init() {
 }
 
 //NewB2BUA .
-func NewB2BUA(disableAuth bool) *B2BUA {
+func NewB2BUA(disableAuth bool, enableTLS bool) *B2BUA {
 	b := &B2BUA{
 		registry: registry.Registry(registry.NewMemoryRegistry()),
 		accounts: make(map[string]string),
@@ -95,14 +95,16 @@ func NewB2BUA(disableAuth bool) *B2BUA {
 		logger.Panic(err)
 	}
 
-	tlsOptions := &transport.TLSConfig{Cert: "certs/cert.pem", Key: "certs/key.pem"}
+	if enableTLS {
+		tlsOptions := &transport.TLSConfig{Cert: "certs/cert.pem", Key: "certs/key.pem"}
 
-	if err := stack.ListenTLS("tls", "0.0.0.0:5061", tlsOptions); err != nil {
-		logger.Panic(err)
-	}
+		if err := stack.ListenTLS("tls", "0.0.0.0:5061", tlsOptions); err != nil {
+			logger.Panic(err)
+		}
 
-	if err := stack.ListenTLS("wss", "0.0.0.0:5081", tlsOptions); err != nil {
-		logger.Panic(err)
+		if err := stack.ListenTLS("wss", "0.0.0.0:5081", tlsOptions); err != nil {
+			logger.Panic(err)
+		}
 	}
 
 	ua := ua.NewUserAgent(&ua.UserAgentConfig{
