@@ -99,7 +99,7 @@ func (auth *Authorization) CalcResponse(request sip.Request) *Authorization {
 	ncHex := "00000000"
 	auth.ncHex = ncHex[:len(ncHex)-len(hex)] + hex
 	// Nc-value = 8LHEX. Max value = 'FFFFFFFF'.
-	if auth.nc == 4294967296 {
+	if temp_nc := int64(auth.nc); temp_nc == 4294967296 {
 		auth.nc = 1
 		auth.ncHex = "00000001"
 	}
