@@ -26,7 +26,7 @@ func DoPushKit2(p12Cert string, deviceToken string, payload map[string]string) {
 	data, _ := json.Marshal(payload)
 	notification := &apns2.Notification{
 		DeviceToken: deviceToken,
-		Topic:       "com.paycall.mtravel2.voip",
+		Topic:       "CHANGET_TO_YOUR_APP_BUNDLE_ID_WITH(.voip)_POSTFIX",
 		Payload:     data,
 	}
 	notification.PushType = apns2.PushTypeVOIP
