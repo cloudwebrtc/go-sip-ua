@@ -33,7 +33,7 @@ func pushCallback(pn *registry.PNParams, payload map[string]string) error {
 	fmt.Printf("Handle Push Request:\nprovider=%v\nparam=%v\nprid=%v\npayload=%v", pn.Provider, pn.Param, pn.PRID, payload)
 	switch pn.Provider {
 	case "apns":
-		go pushkit.DoPushKit("./voip-callkeep.p12", pn.PRID, payload)
+		go pushkit.DoPushKit2("./AuthKey_D9N2S55R83.p8", pn.PRID, payload)
 		return nil
 	case "fcm":
 		go fcm.FCMPush("service-account.json", pn.PRID, payload)
@@ -61,7 +61,7 @@ func init() {
 	logger = utils.NewLogrusLogger(log.InfoLevel, "B2BUA", nil)
 }
 
-//NewB2BUA .
+// NewB2BUA .
 func NewB2BUA(disableAuth bool, enableTLS bool) *B2BUA {
 	b := &B2BUA{
 		registry: registry.Registry(registry.NewMemoryRegistry()),
@@ -257,7 +257,7 @@ func (b *B2BUA) removeCall(sess *session.Session) {
 	}
 }
 
-//Shutdown .
+// Shutdown .
 func (b *B2BUA) Shutdown() {
 	b.ua.Shutdown()
 }
@@ -287,22 +287,22 @@ func (b *B2BUA) requiresChallenge(req sip.Request) bool {
 	return false
 }
 
-//AddAccount .
+// AddAccount .
 func (b *B2BUA) AddAccount(username string, password string) {
 	b.accounts[username] = password
 }
 
-//GetAccounts .
+// GetAccounts .
 func (b *B2BUA) GetAccounts() map[string]string {
 	return b.accounts
 }
 
-//GetRegistry .
+// GetRegistry .
 func (b *B2BUA) GetRegistry() registry.Registry {
 	return b.registry
 }
 
-//GetRFC8599 .
+// GetRFC8599 .
 func (b *B2BUA) GetRFC8599() *registry.RFC8599 {
 	return b.rfc8599
 }
