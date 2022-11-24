@@ -16,6 +16,9 @@ type ContactInstance struct {
 
 func (c *ContactInstance) GetPNParams() *PNParams {
 	params := c.Contact.Address.UriParams()
+	if params == nil {
+		return nil
+	}
 	if provider, ok := params.Get("pn-provider"); ok {
 		param, _ := params.Get("pn-param")
 		prid, found := params.Get("pn-prid")
