@@ -78,7 +78,7 @@ func NewSipStack(config *SipStackConfig) *SipStack {
 		config = &SipStackConfig{}
 	}
 
-	logger := utils.NewLogrusLogger(log.DebugLevel, "SipStack", nil)
+	logger := utils.NewLogrusLogger(log.InfoLevel, "SipStack", nil)
 
 	var host string
 	var ip net.IP
@@ -139,7 +139,7 @@ func NewSipStack(config *SipStackConfig) *SipStack {
 		tpl: s.tp,
 		s:   s,
 	}
-	s.tx = transaction.NewLayer(sipTp, utils.NewLogrusLogger(log.DebugLevel, "transaction.Layer", nil))
+	s.tx = transaction.NewLayer(sipTp, utils.NewLogrusLogger(log.InfoLevel, "transaction.Layer", nil))
 
 	s.running.Set()
 	go s.serve()
@@ -291,7 +291,7 @@ func (s *SipStack) handleRequest(req sip.Request, tx sip.ServerTransaction) {
 	go handler(req, tx)
 }
 
-//Request Send SIP message
+// Request Send SIP message
 func (s *SipStack) Request(req sip.Request) (sip.ClientTransaction, error) {
 	if !s.running.IsSet() {
 		return nil, fmt.Errorf("can not send through stopped server")

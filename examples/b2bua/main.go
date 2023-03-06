@@ -67,9 +67,9 @@ func consoleLoop(b2bua *b2bua.B2BUA) {
 			accounts := b2bua.GetAccounts()
 			if len(accounts) > 0 {
 				fmt.Printf("Users:\n")
-				fmt.Printf("Username \t Password\n")
+				fmt.Printf("Username/Password\n")
 				for user, pass := range accounts {
-					fmt.Printf("%v \t\t %v\n", user, pass)
+					fmt.Printf("%v/%v\n", user, pass)
 				}
 			} else {
 				fmt.Printf("No users\n")
@@ -124,12 +124,12 @@ func consoleLoop(b2bua *b2bua.B2BUA) {
 
 func main() {
 	noconsole := false
-	disableAuth := false
-	enableTLS := false
+	disableAuth := true
+	enableTLS := true
 	h := false
 	flag.BoolVar(&h, "h", false, "this help")
 	flag.BoolVar(&noconsole, "nc", false, "no console mode")
-	flag.BoolVar(&disableAuth, "da", false, "disable auth mode")
+	flag.BoolVar(&disableAuth, "da", false, "disable authentication")
 	flag.BoolVar(&enableTLS, "tls", false, "enable TLS")
 	flag.Usage = usage
 
@@ -150,11 +150,15 @@ func main() {
 
 	b2bua := b2bua.NewB2BUA(disableAuth, enableTLS)
 
-	// Add sample accounts.
-	b2bua.AddAccount("100", "100")
-	b2bua.AddAccount("200", "200")
-	b2bua.AddAccount("300", "300")
-	b2bua.AddAccount("400", "400")
+	if !disableAuth {
+		// Add sample accounts.
+		b2bua.AddAccount("100", "100")
+		b2bua.AddAccount("200", "200")
+		b2bua.AddAccount("300", "300")
+		b2bua.AddAccount("400", "400")
+		b2bua.AddAccount("548181001", "123abc")
+		b2bua.AddAccount("548181002", "456efg")
+	}
 
 	if !noconsole {
 		consoleLoop(b2bua)

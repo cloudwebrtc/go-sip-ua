@@ -33,10 +33,10 @@ func pushCallback(pn *registry.PNParams, payload map[string]string) error {
 	fmt.Printf("Handle Push Request:\nprovider=%v\nparam=%v\nprid=%v\npayload=%v", pn.Provider, pn.Param, pn.PRID, payload)
 	switch pn.Provider {
 	case "apns":
-		go pushkit.DoPushKit2("./AuthKey_D9N2S55R83.p8", pn.PRID, payload)
+		go pushkit.DoPushKit2("AuthKey_2RTKYJH728.p8", pn.PRID, payload)
 		return nil
 	case "fcm":
-		go fcm.FCMPush("service-account.json", pn.PRID, payload)
+		go fcm.FCMPush("mtravel-app-firebase-adminsdk-kg5a4-4f9674e959.json", pn.PRID, payload)
 		return nil
 	}
 	return fmt.Errorf("%v provider not found", pn.Provider)
@@ -58,7 +58,7 @@ var (
 )
 
 func init() {
-	logger = utils.NewLogrusLogger(log.InfoLevel, "B2BUA", nil)
+	logger = utils.NewLogrusLogger(log.DebugLevel, "B2BUA", nil)
 }
 
 // NewB2BUA .
@@ -108,7 +108,6 @@ func NewB2BUA(disableAuth bool, enableTLS bool) *B2BUA {
 	}
 
 	ua := ua.NewUserAgent(&ua.UserAgentConfig{
-
 		SipStack: stack,
 	})
 

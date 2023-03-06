@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/ghettovoice/gosip/sip"
+	"github.com/google/uuid"
 )
 
 const (
@@ -28,7 +29,7 @@ func (p *PNParams) Equals(other *PNParams) bool {
 	return p.Provider == other.Provider && p.Param == other.Param && p.PRID == other.PRID
 }
 
-//Disabled https://tools.ietf.org/html/rfc8599#section-4.1.2
+// Disabled https://tools.ietf.org/html/rfc8599#section-4.1.2
 func (p *PNParams) Disabled() bool {
 	return len(p.PRID) == 0
 }
@@ -101,6 +102,7 @@ func (r *RFC8599) TryPush(aor sip.Uri, from *sip.FromHeader) (*Pusher, bool) {
 				"caller_name":    displayName,
 				"caller_id_type": "number",
 				"has_video":      "false",
+				"uuid":           uuid.New().String(),
 			}
 
 			if err := r.PushCallback(&params, payload); err != nil {
@@ -143,7 +145,7 @@ func (pn *Pusher) WaitContactOnline() (*ContactInstance, error) {
 	}
 }
 
-//Abort caller cancelled the call
+// Abort caller cancelled the call
 func (pn *Pusher) Abort() {
 	pn.abort <- 1
 }

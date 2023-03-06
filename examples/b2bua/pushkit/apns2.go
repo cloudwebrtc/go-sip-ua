@@ -8,8 +8,8 @@ import (
 	"github.com/sideshow/apns2/token"
 )
 
-func DoPushKit2(p12Cert string, deviceToken string, payload map[string]string) {
-	authKey, err := token.AuthKeyFromFile("./AuthKey_D9N2S55R83.p8")
+func DoPushKit2(p8Cert string, deviceToken string, payload map[string]string) {
+	authKey, err := token.AuthKeyFromFile(p8Cert)
 	if err != nil {
 		log.Fatal("token error:", err)
 	}
@@ -17,16 +17,16 @@ func DoPushKit2(p12Cert string, deviceToken string, payload map[string]string) {
 	t := &token.Token{
 		AuthKey: authKey,
 		// KeyID from developer account (Certificates, Identifiers & Profiles -> Keys)
-		KeyID: "D9N2S55R83",
+		KeyID: "2RTKYJH728",
 		// TeamID from developer account (View Account -> Membership)
-		TeamID: "5J859T6AE8",
+		TeamID: "954G8NSFLG",
 	}
 
 	client := apns2.NewTokenClient(t)
 	data, _ := json.Marshal(payload)
 	notification := &apns2.Notification{
 		DeviceToken: deviceToken,
-		Topic:       "CHANGET_TO_YOUR_APP_BUNDLE_ID_WITH(.voip)_POSTFIX",
+		Topic:       "com.paycall.mtravel.voip",
 		Payload:     data,
 	}
 	notification.PushType = apns2.PushTypeVOIP
