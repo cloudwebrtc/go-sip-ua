@@ -20,6 +20,7 @@ import (
 )
 
 type B2BCall struct {
+	ua  *ua.UserAgent
 	src *session.Session
 	//TODO: Add support for forked calls
 	dest *session.Session
@@ -61,7 +62,7 @@ func init() {
 	logger = utils.NewLogrusLogger(log.InfoLevel, "B2BUA", nil)
 }
 
-//NewB2BUA .
+// NewB2BUA .
 func NewB2BUA(disableAuth bool, enableTLS bool) *B2BUA {
 	b := &B2BUA{
 		registry: registry.Registry(registry.NewMemoryRegistry()),
@@ -257,7 +258,7 @@ func (b *B2BUA) removeCall(sess *session.Session) {
 	}
 }
 
-//Shutdown .
+// Shutdown .
 func (b *B2BUA) Shutdown() {
 	b.ua.Shutdown()
 }
@@ -287,22 +288,22 @@ func (b *B2BUA) requiresChallenge(req sip.Request) bool {
 	return false
 }
 
-//AddAccount .
+// AddAccount .
 func (b *B2BUA) AddAccount(username string, password string) {
 	b.accounts[username] = password
 }
 
-//GetAccounts .
+// GetAccounts .
 func (b *B2BUA) GetAccounts() map[string]string {
 	return b.accounts
 }
 
-//GetRegistry .
+// GetRegistry .
 func (b *B2BUA) GetRegistry() registry.Registry {
 	return b.registry
 }
 
-//GetRFC8599 .
+// GetRFC8599 .
 func (b *B2BUA) GetRFC8599() *registry.RFC8599 {
 	return b.rfc8599
 }
