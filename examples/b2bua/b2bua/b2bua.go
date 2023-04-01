@@ -19,17 +19,6 @@ import (
 	"github.com/ghettovoice/gosip/transport"
 )
 
-type B2BCall struct {
-	ua  *ua.UserAgent
-	src *session.Session
-	//TODO: Add support for forked calls
-	dest *session.Session
-}
-
-func (b *B2BCall) ToString() string {
-	return b.src.Contact() + " => " + b.dest.Contact()
-}
-
 func pushCallback(pn *registry.PNParams, payload map[string]string) error {
 	fmt.Printf("Handle Push Request:\nprovider=%v\nparam=%v\nprid=%v\npayload=%v", pn.Provider, pn.Param, pn.PRID, payload)
 	switch pn.Provider {
@@ -49,17 +38,21 @@ type B2BUA struct {
 	ua       *ua.UserAgent
 	accounts map[string]string
 	registry registry.Registry
-	domains  []string
 	calls    []*B2BCall
 	rfc8599  *registry.RFC8599
 }
 
 var (
-	logger log.Logger
+	logger     log.Logger
+	callConfig CallConfig
 )
 
 func init() {
 	logger = utils.NewLogrusLogger(log.InfoLevel, "B2BUA", nil)
+	callConfig = CallConfig{
+		Codecs:             []string{"PCMU", "PCMA", "opus", "H264"},
+		ExternalRtpAddress: "0.0.0.0",
+	}
 }
 
 // NewB2BUA .
@@ -129,6 +122,12 @@ func NewB2BUA(disableAuth bool, enableTLS bool) *B2BUA {
 				if from.DisplayName != nil {
 					displayName = from.DisplayName.String()
 				}
+				call := &B2BCall{src: sess, ua: ua}
+
+				call.Init()
+
+				offer := sess.RemoteSdp()
+				call.SetALegOffer(&Desc{Type: "offer", SDP: offer})
 
 				// Create a temporary profile. In the future, it will support reading profiles from files or data
 				// For example: use a specific ip or sip account as outbound trunk
@@ -139,13 +138,17 @@ func NewB2BUA(disableAuth bool, enableTLS bool) *B2BUA {
 					logger.Error(err2)
 				}
 
-				offer := sess.RemoteSdp()
-				dest, err := ua.Invite(profile, called, recipient, &offer)
+				bLegOffer, _ := call.CreateBLegOffer()
+
+				dest, err := ua.Invite(profile, called, recipient, &bLegOffer.SDP)
 				if err != nil {
 					logger.Errorf("B-Leg session error: %v", err)
 					return
 				}
-				b.calls = append(b.calls, &B2BCall{src: sess, dest: dest})
+
+				call.dest = dest
+
+				b.calls = append(b.calls, call)
 			}
 
 			// Try to find online contact records.
@@ -165,7 +168,7 @@ func NewB2BUA(disableAuth bool, enableTLS bool) *B2BUA {
 				instance, err := pusher.WaitContactOnline()
 				if err != nil {
 					logger.Errorf("Push failed, error: %v", err)
-					sess.Reject(500, fmt.Sprint("Push failed"))
+					sess.Reject(500, "Push failed")
 					return
 				}
 				doInvite(instance)
@@ -192,7 +195,9 @@ func NewB2BUA(disableAuth bool, enableTLS bool) *B2BUA {
 			call := b.findCall(sess)
 			if call != nil && call.dest == sess {
 				answer := call.dest.RemoteSdp()
-				call.src.ProvideAnswer(answer)
+				call.SetBLegAnswer(&Desc{Type: "answer", SDP: answer})
+				aLegAnswer, _ := call.CreateALegAnswer()
+				call.src.ProvideAnswer(aLegAnswer.SDP)
 				call.src.Provisional((*resp).StatusCode(), (*resp).Reason())
 			}
 
@@ -202,7 +207,9 @@ func NewB2BUA(disableAuth bool, enableTLS bool) *B2BUA {
 			call := b.findCall(sess)
 			if call != nil && call.dest == sess {
 				answer := call.dest.RemoteSdp()
-				call.src.ProvideAnswer(answer)
+				call.SetBLegAnswer(&Desc{Type: "answer", SDP: answer})
+				aLegAnswer, _ := call.CreateALegAnswer()
+				call.src.ProvideAnswer(aLegAnswer.SDP)
 				call.src.Accept(200)
 			}
 
@@ -221,6 +228,8 @@ func NewB2BUA(disableAuth bool, enableTLS bool) *B2BUA {
 					call.src.End()
 				}
 			}
+
+			call.Terminate()
 			b.removeCall(sess)
 
 		}

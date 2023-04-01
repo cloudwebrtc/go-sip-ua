@@ -16,6 +16,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/pixelbender/go-sdp/sdp"
 )
 
 type Map map[string]interface{}
@@ -189,10 +191,7 @@ func DialUDPInPortRange(portMin, portMax int, network string, laddr *net.UDPAddr
 	return nil, ErrPort
 }
 
-func ListenUDPInPortRange(portMin, portMax int, network string, laddr *net.UDPAddr) (*net.UDPConn, error) {
-	if (laddr.Port != 0) || ((portMin == 0) && (portMax == 0)) {
-		return net.ListenUDP(network, laddr)
-	}
+func ListenRTPInPortRange(portMin, portMax int, network string, lRtpAddr *net.UDPAddr, lRtcpAddr *net.UDPAddr) ([]*net.UDPConn, error) {
 	var i, j int
 	i = portMin
 	if i == 0 {
@@ -208,13 +207,26 @@ func ListenUDPInPortRange(portMin, portMax int, network string, laddr *net.UDPAd
 
 	portStart := rand.Intn(j-i+1) + i
 	portCurrent := portStart
+
+	conns := make([]*net.UDPConn, 2)
 	for {
-		*laddr = net.UDPAddr{IP: laddr.IP, Port: portCurrent}
-		c, e := net.ListenUDP(network, laddr)
+		*lRtpAddr = net.UDPAddr{IP: lRtpAddr.IP, Port: portCurrent}
+		c, e := net.ListenUDP(network, lRtpAddr)
 		if e == nil {
-			return c, e
+			if conns[0] == nil {
+				conns[0] = c
+			} else {
+				conns[1] = c
+				return conns, e
+			}
+			*lRtcpAddr = net.UDPAddr{IP: lRtcpAddr.IP, Port: portCurrent + 1}
+			c, e = net.ListenUDP(network, lRtcpAddr)
+			if e == nil {
+				conns[1] = c
+				return conns, e
+			}
 		}
-		logger.Errorf("failed to listen %s: %v", laddr.String(), e)
+		logger.Errorf("failed to listen %s: %v", lRtpAddr.String(), e)
 		portCurrent++
 		if portCurrent > j {
 			portCurrent = i
@@ -223,7 +235,8 @@ func ListenUDPInPortRange(portMin, portMax int, network string, laddr *net.UDPAd
 			break
 		}
 	}
-	return nil, ErrPort
+
+	return conns, ErrPort
 }
 
 func PathExists(path string) (bool, error) {
@@ -319,4 +332,51 @@ func NewMap(args ...interface{}) map[string]interface{} {
 		msg[args[2*i].(string)] = args[2*i+1]
 	}
 	return msg
+}
+
+func HasWebRTCAttributes(attributes []*sdp.Attr) bool {
+	hasIce := false
+	hasDtls := false
+	for _, a := range attributes {
+		if a.Name == "ice-ufrag" {
+			hasIce = true
+		}
+		if a.Name == "fingerprint" {
+			hasDtls = true
+		}
+	}
+	return hasIce && hasDtls
+}
+
+func ParseTransportType(sdp *sdp.Session) TransportType {
+	if sdp == nil {
+		return TransportTypeUnknown
+	}
+	for _, m := range sdp.Media {
+		// Proto: "UDP/TLS/RTP/SAVPF"
+		if strings.Contains(m.Proto, "SAVPF") && HasWebRTCAttributes(m.Attributes) {
+			return TransportTypeRTC
+		}
+	}
+	return TransportTypeSIP
+}
+
+func ParseTrackInfos(sdp *sdp.Session) ([]*TrackInfo, error) {
+	if sdp == nil {
+		return nil, errors.New("sdp is nil")
+	}
+	trackInfos := make([]*TrackInfo, 0)
+	for _, m := range sdp.Media {
+		trackInfo := &TrackInfo{}
+		trackInfo.Codecs = m.Format
+		if m.Type == "audio" {
+			trackInfo.TrackType = TrackTypeAudio
+		} else if m.Type == "video" {
+			trackInfo.TrackType = TrackTypeVideo
+		} else {
+			continue
+		}
+		trackInfos = append(trackInfos, trackInfo)
+	}
+	return trackInfos, nil
 }

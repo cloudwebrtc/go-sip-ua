@@ -10,12 +10,14 @@ require (
 	github.com/google/uuid v1.3.0
 	github.com/kr/pretty v0.2.0 // indirect
 	github.com/mgutz/ansi v0.0.0-20200706080929-d51e80ef957d // indirect
-	github.com/onsi/ginkgo v1.16.5 // indirect
 	github.com/onsi/gomega v1.27.2 // indirect
+	github.com/pion/interceptor v0.1.12
+	github.com/pion/rtcp v1.2.10
+	github.com/pion/webrtc/v3 v3.1.59
 	github.com/pixelbender/go-sdp v1.1.0
 	github.com/sirupsen/logrus v1.8.1
 	github.com/tevino/abool v1.2.0
 	github.com/x-cray/logrus-prefixed-formatter v0.5.2
-	golang.org/x/crypto v0.1.0
+	golang.org/x/crypto v0.6.0
 	google.golang.org/api v0.43.0
 )
