@@ -97,7 +97,7 @@ func NewB2BUA(disableAuth bool, enableTLS bool) *B2BUA {
 			logger.Panic(err)
 		}
 
-		if err := stack.ListenTLS("wss", "0.0.0.0:5081", tlsOptions); err != nil {
+		if err := stack.ListenTLS("wss", "0.0.0.0:8089", tlsOptions); err != nil {
 			logger.Panic(err)
 		}
 	}

@@ -186,7 +186,7 @@ func (c *WebRTCTransport) OnRtcpPacket(rtcpHandler func(trackType TrackType, pay
 }
 
 func (c *WebRTCTransport) onRtpPacket(trackType TrackType, packet []byte) error {
-	logger.Infof("WebRTCTransport::OnRtpPacketReceived: %v read %d bytes", trackType, len(packet))
+	logger.Debugf("WebRTCTransport::OnRtpPacketReceived: %v read %d bytes", trackType, len(packet))
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	if c.rtpHandler != nil {
@@ -196,7 +196,7 @@ func (c *WebRTCTransport) onRtpPacket(trackType TrackType, packet []byte) error 
 }
 
 func (c *WebRTCTransport) onRtcpPacket(trackType TrackType, packet []byte) error {
-	logger.Infof("WebRTCTransport::OnRtcpPacketReceived: %v read %d bytes", trackType, len(packet))
+	logger.Debugf("WebRTCTransport::OnRtcpPacketReceived: %v read %d bytes", trackType, len(packet))
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	if c.rtcpHandler != nil {
@@ -277,7 +277,9 @@ func (c *WebRTCTransport) AddLocalTracks() error {
 		return err
 	}
 
-	if _, err = c.pc.AddTrack(videoTrack); err != nil {
+	if rtpSender, err := c.pc.AddTrack(videoTrack); err == nil {
+		c.HandleRtcpFb(rtpSender)
+	} else {
 		logger.Errorf("AddTrack: panic => %v", err)
 		return err
 	}
@@ -389,30 +391,35 @@ func (c *WebRTCTransport) HandleRtcpFb(rtpSender *webrtc.RTPSender) {
 				case *rtcp.PictureLossIndication:
 					if pliOnce {
 						fwdPkts = append(fwdPkts, p)
-						logger.Infof("PictureLossIndication")
+						logger.Infof("Picture Loss Indication")
 						//hi.CameraSendKeyFrame()
+						buf, _ := p.Marshal()
+						c.onRtcpPacket(TrackTypeVideo, buf)
 						pliOnce = false
 					}
 				case *rtcp.FullIntraRequest:
 					if firOnce {
 						fwdPkts = append(fwdPkts, p)
-						//logger.Infof("FullIntraRequest")
+						logger.Infof("FullIntraRequest")
 						firOnce = false
 					}
 				case *rtcp.ReceiverEstimatedMaximumBitrate:
 					if expectedMinBitrate == 0 || expectedMinBitrate > uint64(p.Bitrate) {
 						expectedMinBitrate = uint64(p.Bitrate)
 						//hi.CameraUpdateBitrate(uint32(expectedMinBitrate / 1024))
-						logger.Infof("ReceiverEstimatedMaximumBitrate %d", expectedMinBitrate/1024)
+						logger.Debugf("ReceiverEstimatedMaximumBitrate %d", expectedMinBitrate/1024)
 					}
 				case *rtcp.ReceiverReport:
 					for _, r := range p.Reports {
 						if maxRatePacketLoss == 0 || maxRatePacketLoss < r.FractionLost {
 							maxRatePacketLoss = r.FractionLost
-							logger.Infof("maxRatePacketLoss %d", maxRatePacketLoss)
+							logger.Debugf("maxRatePacketLoss %d", maxRatePacketLoss)
 						}
 					}
 				case *rtcp.TransportLayerNack:
+					logger.Infof("Nack")
+					buf, _ := p.Marshal()
+					c.onRtcpPacket(TrackTypeVideo, buf)
 				}
 			}
 		}

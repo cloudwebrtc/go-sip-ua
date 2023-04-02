@@ -82,6 +82,7 @@ func (c *UdpTansport) Init(config CallConfig) error {
 						Name:      codec.Name,
 						ClockRate: codec.ClockRate,
 						Params:    codec.Params,
+						Feedback:  codec.Feedback,
 					})
 				}
 			}
@@ -108,7 +109,7 @@ func (c *UdpTansport) OnRtcpPacket(rtcpHandler func(trackType TrackType, payload
 }
 
 func (c *UdpTansport) onRtpPacket(trackType TrackType, packet []byte, raddr net.Addr) error {
-	logger.Infof("UdpTansport::OnRtpPacketReceived: %v read %d bytes, raddr %v", trackType, len(packet), raddr)
+	logger.Debugf("UdpTansport::OnRtpPacketReceived: %v read %d bytes, raddr %v", trackType, len(packet), raddr)
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	if c.rtpHandler != nil {
@@ -118,7 +119,7 @@ func (c *UdpTansport) onRtpPacket(trackType TrackType, packet []byte, raddr net.
 }
 
 func (c *UdpTansport) onRtcpPacket(trackType TrackType, packet []byte, raddr net.Addr) error {
-	logger.Infof("UdpTansport::OnRtcpPacketReceived: %v read %d bytes, raddr %v", trackType, len(packet), raddr)
+	logger.Debugf("UdpTansport::OnRtcpPacketReceived: %v read %d bytes, raddr %v", trackType, len(packet), raddr)
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	if c.rtcpHandler != nil {

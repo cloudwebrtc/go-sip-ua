@@ -176,26 +176,26 @@ func (b *B2BCall) BridgeMediaStream() error {
 	b.srcTrans.OnRtpPacket(func(trackType TrackType, payload []byte) {
 		_, err := b.destTrans.WriteRTP(trackType, payload)
 		if err != nil {
-			logger.Errorf("WriteRTP error: %v", err)
+			logger.Errorf("WriteRTP[%v] %v error: %v", b.destTrans.Type(), trackType, err)
 		}
 	})
 	b.srcTrans.OnRtcpPacket(func(trackType TrackType, payload []byte) {
 		_, err := b.destTrans.WriteRTCP(trackType, payload)
 		if err != nil {
-			logger.Errorf("WriteRTCP error: %v", err)
+			logger.Errorf("WriteRTCP[%v] %v error: %v", b.destTrans.Type(), trackType, err)
 		}
 	})
 
 	b.destTrans.OnRtpPacket(func(trackType TrackType, payload []byte) {
 		_, err := b.srcTrans.WriteRTP(trackType, payload)
 		if err != nil {
-			logger.Errorf("WriteRTP error: %v", err)
+			logger.Errorf("WriteRTP[%v] %v error: %v", b.srcTrans.Type(), trackType, err)
 		}
 	})
 	b.destTrans.OnRtcpPacket(func(trackType TrackType, payload []byte) {
 		_, err := b.srcTrans.WriteRTCP(trackType, payload)
 		if err != nil {
-			logger.Errorf("WriteRTCP error: %v", err)
+			logger.Errorf("WriteRTCP[%v] %v error: %v", b.srcTrans.Type(), trackType, err)
 		}
 	})
 	return nil
