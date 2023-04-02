@@ -1,7 +1,12 @@
 package session
 
+import (
+	"github.com/ghettovoice/gosip/sip"
+)
+
+
 // ReasonPhrase .
-var ReasonPhrase = map[uint16]string{
+var ReasonPhrase = map[sip.StatusCode]string{
 	100: "Trying",
 	180: "Ringing",
 	181: "Call Is Being Forwarded",
@@ -99,6 +104,7 @@ const (
 	Canceled         Status = "Canceled"
 	Confirmed        Status = "Confirmed"  /**< After ACK s sent/received. */
 	Failure          Status = "Failure"    /**< Session s rejected or canceled. */
+	TimedOut         Status = "TimedOut" /**< Session s timed out. */
 	Terminated       Status = "Terminated" /**< Session s terminated. */
 )
 

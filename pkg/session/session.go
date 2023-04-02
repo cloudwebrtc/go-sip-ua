@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	"github.com/cloudwebrtc/go-sip-ua/pkg/utils"
 	"github.com/ghettovoice/gosip/log"
@@ -14,7 +15,7 @@ import (
 type RequestCallback func(ctx context.Context, request sip.Request, authorizer sip.Authorizer, waitForResult bool, attempt int) (sip.Response, error)
 
 type Session struct {
-	lock           sync.Mutex
+	lock           sync.RWMutex
 	requestCallbck RequestCallback
 	status         Status
 	callID         sip.CallID
@@ -29,6 +30,9 @@ type Session struct {
 	localURI       sip.Address
 	remoteURI      sip.Address
 	remoteTarget   sip.Uri
+	routeSet       []sip.Uri
+	localCSeq      uint32
+	remoteCSeq     uint32
 	logger         log.Logger
 }
 
@@ -57,16 +61,21 @@ func NewInviteSession(reqcb RequestCallback, uaType string,
 		req.AppendHeader(to)
 	}
 
+	cseq, _ := req.CSeq()
+
 	if uaType == "UAS" {
 		s.localURI = sip.Address{Uri: to.Address, Params: to.Params}
 		s.remoteURI = sip.Address{Uri: from.Address, Params: from.Params}
 		s.remoteTarget = contact.Address
 		s.offer = req.Body()
+		s.StoreRouteSet(req, false)
+		s.remoteCSeq = cseq.SeqNo
 	} else if uaType == "UAC" {
 		s.localURI = sip.Address{Uri: from.Address, Params: from.Params}
 		s.remoteURI = sip.Address{Uri: to.Address, Params: to.Params}
 		s.remoteTarget = req.Recipient()
 		s.offer = req.Body()
+		s.localCSeq = cseq.SeqNo
 	}
 
 	s.request = req
@@ -109,6 +118,18 @@ func (s *Session) Contact() string {
 
 func (s *Session) CallID() *sip.CallID {
 	return &s.callID
+}
+
+func (s *Session) NextLocalCSeq() uint32 {
+	return atomic.AddUint32(&s.localCSeq, 1)
+}
+
+func (s *Session) RemoteCSeq() uint32 {
+	return atomic.LoadUint32(&s.remoteCSeq)
+}
+
+func (s *Session) SetRemoteCSeq(cseq uint32){
+	atomic.StoreUint32(&s.remoteCSeq, cseq)
 }
 
 func (s *Session) Request() sip.Request {
@@ -155,10 +176,38 @@ func (s *Session) IsEnded() bool {
 		fallthrough
 	case Canceled:
 		fallthrough
+	case TimedOut:
+		fallthrough
 	case Terminated:
 		return true
 	default:
 		return false
+	}
+}
+
+func (s *Session) StoreRouteSet(msg sip.Message, reverse bool) {
+	if hdrs := msg.GetHeaders("Record-Route"); len(hdrs) > 0 {
+		s.Log().Debug("Storing Route-Set")
+		l := 0
+		for _, rr := range hdrs {
+			l += len(rr.(*sip.RecordRouteHeader).Addresses)
+		}
+		rs := make([]sip.Uri, l)
+		i := 0
+		if reverse {
+			i = l-1
+		}
+		for _, rr := range hdrs {
+			for _, r := range rr.(*sip.RecordRouteHeader).Addresses {
+				rs[i] = r
+				if reverse {
+					i -= 1
+				} else {
+					i += 1
+				}
+			}
+		}
+		s.routeSet = rs
 	}
 }
 
@@ -172,6 +221,15 @@ func (s *Session) StoreResponse(response sip.Response) {
 		if to.Params != nil && to.Params.Has("tag") {
 			//Update to URI.
 			s.remoteURI = sip.Address{Uri: to.Address, Params: to.Params}
+			if ct, ok:= response.Contact(); ok {
+				s.remoteTarget = ct.Address
+			}
+			if response.IsSuccess() || response.IsProvisional() {
+				if s.Status() != Confirmed && (response.Method() == sip.INVITE || response.Method() == sip.SUBSCRIBE) {
+					s.routeSet = nil
+					s.StoreRouteSet(response, true)
+				}
+			}
 		}
 
 		sdp := response.Body()
@@ -196,8 +254,8 @@ func (s *Session) SetState(status Status) {
 }
 
 func (s *Session) Status() Status {
-	s.lock.Lock()
-	defer s.lock.Unlock()
+	s.lock.RLock()
+	defer s.lock.RUnlock()
 	return s.status
 }
 
@@ -223,7 +281,7 @@ func (s *Session) ProvideAnswer(sdp string) {
 //Info send SIP INFO
 func (s *Session) Info(content string, contentType string) {
 	method := sip.INFO
-	req := s.makeRequest(s.uaType, method, sip.MessageID(s.callID), s.request, s.response)
+	req := s.makeRequest(method)
 	req.SetBody(content, true)
 	hdr := sip.ContentType(contentType)
 	req.AppendHeader(&hdr)
@@ -233,7 +291,7 @@ func (s *Session) Info(content string, contentType string) {
 //ReInvite send re-INVITE
 func (s *Session) ReInvite() {
 	method := sip.INVITE
-	req := s.makeRequest(s.uaType, method, sip.MessageID(s.callID), s.request, s.response)
+	req := s.makeRequest(method)
 	req.SetBody(s.offer, true)
 	hdr := sip.ContentType("application/sdp")
 	req.AppendHeader(&hdr)
@@ -242,8 +300,12 @@ func (s *Session) ReInvite() {
 
 //Bye send Bye request.
 func (s *Session) Bye() (sip.Response, error) {
-	req := s.makeRequest(s.uaType, sip.BYE, sip.MessageID(s.callID), s.request, s.response)
-	return s.sendRequest(req)
+	req := s.makeRequest(sip.BYE)
+	resp, err := s.sendRequest(req)
+	if err == nil {
+		s.SetState(Terminated)
+	}
+	return resp, err
 }
 
 func (s *Session) sendRequest(req sip.Request) (sip.Response, error) {
@@ -263,13 +325,6 @@ func (s *Session) Reject(statusCode sip.StatusCode, reason string) {
 
 //End end session
 func (s *Session) End() error {
-
-	if s.status == Terminated {
-		err := fmt.Errorf("invalid status: %v", s.status)
-		s.Log().Errorf("Session::End() %v", err)
-		return err
-	}
-
 	switch s.status {
 	// - UAC -
 	case InviteSent:
@@ -299,7 +354,16 @@ func (s *Session) End() error {
 	case Confirmed:
 		s.Log().Info("Terminating session.")
 		s.Bye()
+
+	case Terminated:
+		s.Log().Info("Session already terminated")
+
+	default:
+		err := fmt.Errorf("invalid status: %v", s.status)
+		s.Log().Errorf("Session::End() %v", err)
+		return err
 	}
+
 
 	return nil
 }
@@ -341,9 +405,8 @@ func (s *Session) Redirect(target string, code sip.StatusCode) {
 func (s *Session) Provisional(statusCode sip.StatusCode, reason string) {
 	tx := (s.transaction.(sip.ServerTransaction))
 	request := s.request
-	var response sip.Response
+	response := sip.NewResponseFromRequest(request.MessageID(), request, statusCode, reason, s.answer)
 	if len(s.answer) > 0 {
-		response = sip.NewResponseFromRequest(request.MessageID(), request, statusCode, reason, s.answer)
 		hdrs := response.GetHeaders("Content-Type")
 		if len(hdrs) == 0 {
 			contentType := sip.ContentType("application/sdp")
@@ -352,8 +415,9 @@ func (s *Session) Provisional(statusCode sip.StatusCode, reason string) {
 			sip.CopyHeaders("Content-Type", request, response)
 		}
 		response.SetBody(s.answer, true)
-	} else {
-		response = sip.NewResponseFromRequest(request.MessageID(), request, statusCode, reason, "")
+	}
+	if statusCode == 100 {
+		response.GetHeaders("To")[0].(*sip.ToHeader).Params.Remove("tag")
 	}
 	response.AppendHeader(s.contact)
 
@@ -361,58 +425,31 @@ func (s *Session) Provisional(statusCode sip.StatusCode, reason string) {
 	tx.Respond(response)
 }
 
-func (s *Session) makeRequest(uaType string, method sip.RequestMethod, msgID sip.MessageID, inviteRequest sip.Request, inviteResponse sip.Response) sip.Request {
+func (s *Session) makeRequest(method sip.RequestMethod) sip.Request {
+	mfwd := sip.MaxForwards(70)
+	hdrs := []sip.Header{
+		s.localURI.Clone().AsFromHeader(),
+		s.remoteURI.Clone().AsToHeader(),
+		s.contact,
+		&s.callID,
+		&sip.CSeq{SeqNo: s.NextLocalCSeq(), MethodName: method},
+		&mfwd,
+	}
+
+	msgID := sip.MessageID(s.callID)
 	newRequest := sip.NewRequest(
 		msgID,
 		method,
 		s.remoteTarget,
-		inviteRequest.SipVersion(),
-		[]sip.Header{},
+		"2.0",
+		hdrs,
 		"",
-		inviteRequest.Fields().
-			WithFields(log.Fields{
-				"invite_request_id": inviteRequest.MessageID(),
-			}),
+		log.Fields{"message_id": msgID},
 	)
 
-	from := s.localURI.Clone().AsFromHeader()
-	newRequest.AppendHeader(from)
-	to := s.remoteURI.Clone().AsToHeader()
-	newRequest.AppendHeader(to)
-	newRequest.SetRecipient(s.request.Recipient())
-	sip.CopyHeaders("Via", inviteRequest, newRequest)
-	newRequest.AppendHeader(s.contact)
-
-	if uaType == "UAC" {
-		for _, header := range s.response.Headers() {
-			if header.Name() == "Record-Route" {
-				h := header.(*sip.RecordRouteHeader)
-				rh := &sip.RouteHeader{
-					Addresses: h.Addresses,
-				}
-				newRequest.AppendHeader(rh)
-			}
-		}
-		if len(inviteRequest.GetHeaders("Route")) > 0 {
-			sip.CopyHeaders("Route", inviteRequest, newRequest)
-		}
-	} else if uaType == "UAS" {
-		if len(inviteResponse.GetHeaders("Route")) > 0 {
-			sip.CopyHeaders("Route", inviteResponse, newRequest)
-		}
-		newRequest.SetDestination(inviteResponse.Destination())
-		newRequest.SetSource(inviteResponse.Source())
-		newRequest.SetRecipient(to.Address)
+	if len(s.routeSet) > 0 {
+		newRequest.AppendHeader(&sip.RouteHeader{Addresses: s.routeSet})
 	}
-
-	maxForwardsHeader := sip.MaxForwards(70)
-	newRequest.AppendHeader(&maxForwardsHeader)
-	sip.CopyHeaders("Call-ID", inviteRequest, newRequest)
-	sip.CopyHeaders("CSeq", inviteRequest, newRequest)
-
-	cseq, _ := newRequest.CSeq()
-	cseq.SeqNo++
-	cseq.MethodName = method
 
 	return newRequest
 }
