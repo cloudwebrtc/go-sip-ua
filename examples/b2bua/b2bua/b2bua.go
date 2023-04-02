@@ -235,12 +235,7 @@ func NewB2BUA(disableAuth bool, enableTLS bool) *B2BUA {
 			//TODO: Add support for forked calls
 			call := b.findCall(sess)
 			if call != nil {
-				if call.src == sess {
-					call.dest.End()
-				} else if call.dest == sess {
-					call.src.End()
-				}
-				call.Terminate()
+				call.Terminate(sess)
 			}
 
 			b.removeCall(sess)

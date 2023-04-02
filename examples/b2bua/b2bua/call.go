@@ -61,7 +61,7 @@ func (b *B2BCall) SetState(state CallState) {
 	b.state = state
 }
 
-func (b *B2BCall) Terminate() {
+func (b *B2BCall) Terminate(sess *session.Session) {
 
 	b.srcTrans.OnRtpPacket(nil)
 	b.destTrans.OnRtpPacket(nil)
@@ -77,12 +77,19 @@ func (b *B2BCall) Terminate() {
 		logger.Errorf("Close dest transport error: %v", err)
 	}
 
-	if b.state != Confirmed {
-		b.src.End()
-	} else {
-		b.src.Bye()
+	if b.src == sess {
+		if b.state != Confirmed {
+			b.dest.End()
+		} else {
+			b.dest.Bye()
+		}
+	} else if b.dest == sess {
+		if b.state != Confirmed {
+			b.src.End()
+		} else {
+			b.src.Bye()
+		}
 	}
-
 	b.state = Terminated
 }
 
