@@ -14,6 +14,6 @@ require (
 	github.com/sirupsen/logrus v1.8.1
 	github.com/tevino/abool v1.2.0
 	github.com/x-cray/logrus-prefixed-formatter v0.5.2
-	golang.org/x/crypto v0.0.0-20210921155107-089bfa567519
+	golang.org/x/crypto v0.1.0
 	google.golang.org/api v0.43.0
 )
