@@ -47,7 +47,7 @@ func AuthFromValue(value string) *Authorization {
 		value2 := strings.Replace(match[2], "\"", "", -1)
 		switch match[1] {
 		case "qop":
-			auth.qop = value2
+			auth.qop = strings.Split(value2, ",")[0]
 		case "realm":
 			auth.realm = value2
 		case "algorithm":
