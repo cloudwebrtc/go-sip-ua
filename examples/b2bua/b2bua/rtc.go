@@ -419,7 +419,7 @@ func (c *WebRTCTransport) HandleRtcpFb(rtpSender *webrtc.RTPSender) {
 						}
 					}
 				case *rtcp.TransportLayerNack:
-					logger.Infof("Nack")
+					logger.Debugf("Nack")
 					buf, _ := p.Marshal()
 					c.onRtcpPacket(TrackTypeVideo, buf)
 				}

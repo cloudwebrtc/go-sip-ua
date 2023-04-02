@@ -142,7 +142,7 @@ func (c *UdpPort) loop(conn *net.UDPConn, onPacketReceived func(data []byte, rad
 			logger.Infof("Terminate: stop rtp conn now!")
 			return
 		}
-		n, raddr, err := conn.ReadFrom(buf)
+		n, raddr, err := conn.ReadFromUDP(buf)
 		if err != nil {
 			logger.Infof("RTP Conn [%v] refused, stop now!", raddr)
 			return

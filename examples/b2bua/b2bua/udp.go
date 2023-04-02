@@ -1,10 +1,12 @@
 package b2bua
 
 import (
+	"context"
 	"net"
 	"sync"
 	"time"
 
+	"github.com/cloudwebrtc/go-sip-ua/pkg/utils"
 	"github.com/ghettovoice/gosip/util"
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
@@ -20,13 +22,23 @@ type UdpTansport struct {
 	mu          sync.RWMutex
 	rtpHandler  func(trackType TrackType, payload []byte)
 	rtcpHandler func(trackType TrackType, payload []byte)
+
+	videoSSRC uint32
+	closed    utils.AtomicBool
+	ctx       context.Context
+	cancel    context.CancelFunc
 }
 
 func NewUdpTansport(trackInfos []*TrackInfo) *UdpTansport {
-	return &UdpTansport{
+	t := &UdpTansport{
 		trackInfos: trackInfos,
 		ports:      make(map[TrackType]*UdpPort),
+		videoSSRC:  0,
 	}
+
+	t.ctx, t.cancel = context.WithCancel(context.TODO())
+	t.closed.Set(false)
+	return t
 }
 
 func (c *UdpTansport) Init(config CallConfig) error {
@@ -111,6 +123,19 @@ func (c *UdpTansport) OnRtcpPacket(rtcpHandler func(trackType TrackType, payload
 
 func (c *UdpTansport) onRtpPacket(trackType TrackType, packet []byte, raddr net.Addr) error {
 	logger.Debugf("UdpTansport::OnRtpPacketReceived: %v read %d bytes, raddr %v", trackType, len(packet), raddr)
+
+	p := &rtp.Packet{}
+	if err := p.Unmarshal(packet); err != nil {
+		logger.Errorf("rtp.Packet Unmarshal: e %v len %v", err, len(packet))
+	}
+
+	logger.Debugf("UdpTansport::onRtpPacket: [%v] read %d bytes, seq %d, ts %d, ssrc %v, payload %v", trackType, len(packet), p.SequenceNumber, p.Timestamp, p.SSRC, p.PayloadType)
+
+	if trackType == TrackTypeVideo && c.videoSSRC == 0 {
+		c.videoSSRC = p.SSRC
+		c.RequestKeyFrame(c.videoSSRC)
+	}
+
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	if c.rtpHandler != nil {
@@ -133,14 +158,16 @@ func (c *UdpTansport) WriteRTP(trackType TrackType, packet []byte) (int, error) 
 
 	p := &rtp.Packet{}
 	if err := p.Unmarshal(packet); err != nil {
-
+		logger.Errorf("tp.Packet Unmarshal: e %v", err)
 	}
-	logger.Infof("WebRTCTransport::OnRtpPacketReceived: %v read %d bytes, seq %d, ts %d", trackType, len(packet), p.SequenceNumber, p.Timestamp)
+	logger.Debugf("UdpTansport::WriteRTP: %v, write %d bytes, seq %d, ts %d", trackType, len(packet), p.SequenceNumber, p.Timestamp)
+
 	p.Extension = false
 	p.ExtensionProfile = 0
 	p.Extensions = nil
 	p.Padding = false
 	p.PaddingSize = 0
+
 	if trackType == TrackTypeVideo {
 		p.PayloadType = 98
 	}
@@ -157,6 +184,8 @@ func (c *UdpTansport) WriteRTP(trackType TrackType, packet []byte) (int, error) 
 		logger.Errorf("raddr is nil")
 		return 0, nil
 	}
+
+	logger.Debugf("UdpTansport::WriteRTP: %v, raddr %v", trackType, *raddr)
 	return port.WriteRtpPacket(pktbuf, *raddr)
 }
 
@@ -166,14 +195,16 @@ func (c *UdpTansport) WriteRTCP(trackType TrackType, packet []byte) (int, error)
 	if err != nil {
 		logger.Errorf("Unmarshal rtcp receiver packets err %v", err)
 	}
-	logger.Infof("WebRTCTransport::OnRtcpPacketReceived: %v read %d packets", trackType, len(pkts))
+
+	logger.Debugf("UdpTansport::WriteRTCP: %v read %d packets", trackType, len(pkts))
 
 	port := c.ports[trackType]
 	raddr := port.GetRemoteRtcpAddress()
 	if raddr == nil {
 		logger.Errorf("raddr is nil")
-		return 0, nil
+		raddr = port.GetRemoteRtpAddress()
 	}
+	logger.Infof("UdpTansport::WriteRTCP: %v read %d packets, raddr %v", trackType, len(pkts), *raddr)
 	return port.WriteRtcpPacket(packet, *raddr)
 }
 
@@ -182,6 +213,18 @@ func (c *UdpTansport) Type() TransportType {
 }
 
 func (c *UdpTansport) Close() error {
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.rtcpHandler = nil
+	c.rtpHandler = nil
+
+	if !c.closed.Get() {
+		c.closed.Set(true)
+	}
+	c.cancel()
+
 	for _, udpPort := range c.ports {
 		udpPort.Close()
 	}
@@ -244,6 +287,10 @@ func (c *UdpTansport) RequestKeyFrame(ssrc uint32) error {
 	go func() {
 		ticker := time.NewTicker(time.Second * 3)
 		for range ticker.C {
+			if c.closed.Get() {
+				logger.Infof("Terminate: stop pli loop now!")
+				return
+			}
 			pli := rtcp.PictureLossIndication{MediaSSRC: uint32(ssrc)}
 			buf, err := pli.Marshal()
 			if err != nil {
@@ -255,6 +302,7 @@ func (c *UdpTansport) RequestKeyFrame(ssrc uint32) error {
 				logger.Error(errSend)
 				return
 			}
+			logger.Infof("Sent PLI %v", pli)
 		}
 	}()
 	return nil
