@@ -1,8 +1,6 @@
 package b2bua
 
 import (
-	"fmt"
-
 	"github.com/cloudwebrtc/go-sip-ua/pkg/session"
 	"github.com/cloudwebrtc/go-sip-ua/pkg/ua"
 	"github.com/pixelbender/go-sdp/sdp"
@@ -39,7 +37,8 @@ type B2BCall struct {
 	src  *session.Session
 	dest *session.Session
 
-	trans map[*session.Session]Transport
+	srcTrans  Transport
+	destTrans Transport
 
 	state CallState
 
@@ -52,7 +51,6 @@ func (b *B2BCall) ToString() string {
 
 func (b *B2BCall) Init() {
 	b.state = New
-	b.trans = make(map[*session.Session]Transport)
 }
 
 func (b *B2BCall) State() CallState {
@@ -64,11 +62,28 @@ func (b *B2BCall) SetState(state CallState) {
 }
 
 func (b *B2BCall) Terminate() {
-	for _, trans := range b.trans {
-		if err := trans.Close(); err != nil {
-			logger.Errorf("Close transport error: %v", err)
-		}
+
+	b.srcTrans.OnRtpPacket(nil)
+	b.destTrans.OnRtpPacket(nil)
+
+	b.srcTrans.OnRtcpPacket(nil)
+	b.destTrans.OnRtcpPacket(nil)
+
+	if err := b.srcTrans.Close(); err != nil {
+		logger.Errorf("Close src transport error: %v", err)
 	}
+
+	if err := b.destTrans.Close(); err != nil {
+		logger.Errorf("Close dest transport error: %v", err)
+	}
+
+	if b.state != Confirmed {
+		b.src.End()
+	} else {
+		b.src.Bye()
+	}
+
+	b.state = Terminated
 }
 
 func (b *B2BCall) SetALegOffer(sdp *Desc) error {
@@ -106,7 +121,7 @@ func (b *B2BCall) SetALegOffer(sdp *Desc) error {
 		return err
 	}
 
-	b.trans[b.src] = trans
+	b.srcTrans = trans
 	return nil
 }
 
@@ -121,7 +136,7 @@ func (b *B2BCall) CreateBLegOffer() (*Desc, error) {
 		return nil, err
 	}
 
-	b.trans[b.dest] = trans
+	b.destTrans = trans
 
 	offer, err := trans.CreateOffer()
 	if err != nil {
@@ -132,33 +147,51 @@ func (b *B2BCall) CreateBLegOffer() (*Desc, error) {
 }
 
 func (b *B2BCall) SetBLegAnswer(sdp *Desc) error {
-
-	if trans, found := b.trans[b.dest]; found {
-		err := trans.OnAnswer(sdp)
-		if err != nil {
-			logger.Errorf("OnAnswer error: %v", err)
-			return err
-		}
-	} else {
-		logger.Errorf("Transport not found")
-		return fmt.Errorf("Transport not found")
+	err := b.destTrans.OnAnswer(sdp)
+	if err != nil {
+		logger.Errorf("OnAnswer error: %v", err)
+		return err
 	}
 
 	return nil
 }
 
 func (b *B2BCall) CreateALegAnswer() (*Desc, error) {
-	if trans, found := b.trans[b.src]; found {
-		answer, err := trans.CreateAnswer()
-		if err != nil {
-			logger.Errorf("Answer error: %v", err)
-			return nil, err
-		}
-		return answer, nil
-	} else {
-		logger.Errorf("Transport not found")
-		return nil, fmt.Errorf("Transport not found")
+	answer, err := b.srcTrans.CreateAnswer()
+	if err != nil {
+		logger.Errorf("Answer error: %v", err)
+		return nil, err
 	}
+	return answer, nil
+}
+
+func (b *B2BCall) BridgeMediaStream() error {
+	b.srcTrans.OnRtpPacket(func(trackType TrackType, payload []byte) {
+		_, err := b.destTrans.WriteRTP(trackType, payload)
+		if err != nil {
+			logger.Errorf("WriteRTP error: %v", err)
+		}
+	})
+	b.srcTrans.OnRtcpPacket(func(trackType TrackType, payload []byte) {
+		_, err := b.destTrans.WriteRTCP(trackType, payload)
+		if err != nil {
+			logger.Errorf("WriteRTCP error: %v", err)
+		}
+	})
+
+	b.destTrans.OnRtpPacket(func(trackType TrackType, payload []byte) {
+		_, err := b.srcTrans.WriteRTP(trackType, payload)
+		if err != nil {
+			logger.Errorf("WriteRTP error: %v", err)
+		}
+	})
+	b.destTrans.OnRtcpPacket(func(trackType TrackType, payload []byte) {
+		_, err := b.srcTrans.WriteRTCP(trackType, payload)
+		if err != nil {
+			logger.Errorf("WriteRTCP error: %v", err)
+		}
+	})
+	return nil
 }
 
 type TransportType string
@@ -177,4 +210,10 @@ type Transport interface {
 	OnOffer(sdp *Desc) error
 	CreateAnswer() (*Desc, error)
 	Type() TransportType
+
+	OnRtpPacket(rtpHandler func(trackType TrackType, payload []byte))
+	OnRtcpPacket(rtcpHandler func(trackType TrackType, payload []byte))
+
+	WriteRTP(trackType TrackType, payload []byte) (int, error)
+	WriteRTCP(trackType TrackType, payload []byte) (int, error)
 }

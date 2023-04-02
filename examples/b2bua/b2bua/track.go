@@ -22,8 +22,8 @@ type Track interface {
 
 	PayloadType() int
 
-	WriteRtpPacket(packet []byte) error
-	WriteRtcpPacket(packet []byte) error
+	WriteRtpPacket(packet []byte) (int, error)
+	WriteRtcpPacket(packet []byte) (int, error)
 
 	ReadRtpPacket(func(packet []byte) error) error
 	ReadRtcpPacket(func(packet []byte) error) error

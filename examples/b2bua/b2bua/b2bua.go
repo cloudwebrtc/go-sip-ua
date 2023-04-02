@@ -52,6 +52,7 @@ func init() {
 	callConfig = CallConfig{
 		Codecs:             []string{"PCMU", "PCMA", "opus", "H264"},
 		ExternalRtpAddress: "0.0.0.0",
+		RtcpFeedback:       []string{"nack", "nack pli", "ccm fir", "goog-remb", "transport-cc"},
 	}
 }
 
@@ -149,6 +150,8 @@ func NewB2BUA(disableAuth bool, enableTLS bool) *B2BUA {
 				call.dest = dest
 
 				b.calls = append(b.calls, call)
+
+				call.SetState(Connecting)
 			}
 
 			// Try to find online contact records.
@@ -195,10 +198,18 @@ func NewB2BUA(disableAuth bool, enableTLS bool) *B2BUA {
 			call := b.findCall(sess)
 			if call != nil && call.dest == sess {
 				answer := call.dest.RemoteSdp()
-				call.SetBLegAnswer(&Desc{Type: "answer", SDP: answer})
-				aLegAnswer, _ := call.CreateALegAnswer()
-				call.src.ProvideAnswer(aLegAnswer.SDP)
+				if len(answer) > 0 {
+					call.SetBLegAnswer(&Desc{Type: "answer", SDP: answer})
+					aLegAnswer, err := call.CreateALegAnswer()
+					if err == nil {
+						call.src.ProvideAnswer(aLegAnswer.SDP)
+					}
+					call.SetState(EarlyMedia)
+				} else {
+					call.SetState(Ringing)
+				}
 				call.src.Provisional((*resp).StatusCode(), (*resp).Reason())
+
 			}
 
 		// Handle 200OK or ACK
@@ -211,6 +222,8 @@ func NewB2BUA(disableAuth bool, enableTLS bool) *B2BUA {
 				aLegAnswer, _ := call.CreateALegAnswer()
 				call.src.ProvideAnswer(aLegAnswer.SDP)
 				call.src.Accept(200)
+				call.SetState(Confirmed)
+				call.BridgeMediaStream()
 			}
 
 		// Handle 4XX+
@@ -227,9 +240,9 @@ func NewB2BUA(disableAuth bool, enableTLS bool) *B2BUA {
 				} else if call.dest == sess {
 					call.src.End()
 				}
+				call.Terminate()
 			}
 
-			call.Terminate()
 			b.removeCall(sess)
 
 		}

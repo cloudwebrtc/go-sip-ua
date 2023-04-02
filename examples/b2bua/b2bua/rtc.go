@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"sync"
 
 	"github.com/cloudwebrtc/go-sip-ua/pkg/utils"
 	"github.com/pion/interceptor"
@@ -47,22 +48,23 @@ var (
 
 type WebRTCTransport struct {
 	pc          *webrtc.PeerConnection
-	mediaEngine webrtc.MediaEngine
-	api         *webrtc.API
 	answer      webrtc.SessionDescription
 	offer       webrtc.SessionDescription
-	track       *webrtc.TrackLocalStaticRTP
+	localTracks map[TrackType]*webrtc.TrackLocalStaticRTP
+	closed      utils.AtomicBool
+	ctx         context.Context
+	cancel      context.CancelFunc
+	trackInfos  []*TrackInfo
 
-	closed utils.AtomicBool
-	ctx    context.Context
-	cancel context.CancelFunc
-
-	trackInfos []*TrackInfo
+	mu          sync.RWMutex
+	rtpHandler  func(trackType TrackType, payload []byte)
+	rtcpHandler func(trackType TrackType, payload []byte)
 }
 
 func NewWebRTCTransport(trackInfos []*TrackInfo) *WebRTCTransport {
 	c := &WebRTCTransport{
-		trackInfos: trackInfos,
+		trackInfos:  trackInfos,
+		localTracks: make(map[TrackType]*webrtc.TrackLocalStaticRTP),
 	}
 	c.ctx, c.cancel = context.WithCancel(context.Background())
 	c.closed.Set(false)
@@ -81,15 +83,15 @@ func (c *WebRTCTransport) Init(callConfig CallConfig) error {
 		{
 			RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypePCMU, ClockRate: 8000, Channels: 1, SDPFmtpLine: "", RTCPFeedback: nil},
 			PayloadType:        0,
-		},
-		{
-			RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypePCMA, ClockRate: 8000, Channels: 1, SDPFmtpLine: "", RTCPFeedback: nil},
-			PayloadType:        8,
-		},
-		{
-			RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: mimeTypeOpus, ClockRate: 48000, Channels: 2, SDPFmtpLine: "minptime=10;useinbandfec=1", RTCPFeedback: nil},
-			PayloadType:        111,
-		},
+		}, /*
+			{
+				RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypePCMA, ClockRate: 8000, Channels: 1, SDPFmtpLine: "", RTCPFeedback: nil},
+				PayloadType:        8,
+			},
+			{
+				RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: mimeTypeOpus, ClockRate: 48000, Channels: 2, SDPFmtpLine: "minptime=10;useinbandfec=1", RTCPFeedback: nil},
+				PayloadType:        111,
+			},*/
 	} {
 		if err := m.RegisterCodec(codec, webrtc.RTPCodecTypeAudio); err != nil {
 			return err
@@ -145,7 +147,94 @@ func (c *WebRTCTransport) Init(callConfig CallConfig) error {
 	c.pc.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
 		logger.Infof("PeerConnection State has changed: %s\n", state.String())
 	})
+
+	c.pc.OnTrack(func(track *webrtc.TrackRemote, recevier *webrtc.RTPReceiver) {
+		buf := make([]byte, 1500)
+		for {
+			if c.closed.Get() {
+				logger.Infof("OnTrack: stop now!")
+				break
+			}
+			// Read
+			n, _, readErr := track.Read(buf)
+			if readErr != nil {
+				logger.Errorf("track.Read: readErr => %v", readErr)
+				break
+			}
+			//logger.Infof("WebRTCTransport::OnTrack: read %d bytes", n)
+			if track.Kind() == webrtc.RTPCodecTypeAudio {
+				c.onRtpPacket(TrackTypeAudio, buf[:n])
+			} else if track.Kind() == webrtc.RTPCodecTypeVideo {
+				c.onRtpPacket(TrackTypeVideo, buf[:n])
+			}
+		}
+
+	})
 	return nil
+}
+
+func (c *WebRTCTransport) OnRtpPacket(rtpHandler func(trackType TrackType, payload []byte)) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.rtpHandler = rtpHandler
+}
+
+func (c *WebRTCTransport) OnRtcpPacket(rtcpHandler func(trackType TrackType, payload []byte)) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.rtcpHandler = rtcpHandler
+}
+
+func (c *WebRTCTransport) onRtpPacket(trackType TrackType, packet []byte) error {
+	logger.Infof("WebRTCTransport::OnRtpPacketReceived: %v read %d bytes", trackType, len(packet))
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.rtpHandler != nil {
+		c.rtpHandler(trackType, packet)
+	}
+	return nil
+}
+
+func (c *WebRTCTransport) onRtcpPacket(trackType TrackType, packet []byte) error {
+	logger.Infof("WebRTCTransport::OnRtcpPacketReceived: %v read %d bytes", trackType, len(packet))
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.rtcpHandler != nil {
+		c.rtcpHandler(trackType, packet)
+	}
+	return nil
+}
+
+func (c *WebRTCTransport) WriteRTP(trackType TrackType, packet []byte) (int, error) {
+	if c.closed.Get() {
+		return 0, fmt.Errorf("WebRTCTransport::SendRtpPacket: closed")
+	}
+	if trackType == TrackTypeAudio {
+		if c.localTracks[TrackTypeAudio] != nil {
+			return c.localTracks[TrackTypeAudio].Write(packet)
+		}
+	} else if trackType == TrackTypeVideo {
+		if c.localTracks[TrackTypeVideo] != nil {
+			return c.localTracks[TrackTypeVideo].Write(packet)
+		}
+	}
+	return 0, fmt.Errorf("WebRTCTransport::SendRtpPacket: invalid trackType %v", trackType)
+}
+
+func (c *WebRTCTransport) WriteRTCP(trackType TrackType, packet []byte) (n int, err error) {
+	if c.closed.Get() {
+		return 0, fmt.Errorf("WebRTCTransport::SendRtcpPacket: closed")
+	}
+	rtcpPacket, err := rtcp.Unmarshal(packet)
+	if err != nil {
+		return 0, fmt.Errorf("WebRTCTransport::SendRtcpPacket: rtcp.Unmarshal err => %v", err)
+	}
+	err = c.pc.WriteRTCP(rtcpPacket)
+	if err != nil {
+		return 0, fmt.Errorf("WebRTCTransport::SendRtcpPacket: pc.WriteRTCP err => %v", err)
+	}
+
+	return len(packet), nil
 }
 
 func (c *WebRTCTransport) Close() error {
@@ -157,10 +246,9 @@ func (c *WebRTCTransport) Close() error {
 	return c.pc.Close()
 }
 
-func (c *WebRTCTransport) CreateOffer() (*Desc, error) {
-	var err error = nil
+func (c *WebRTCTransport) AddLocalTracks() error {
 
-	c.track, err = webrtc.NewTrackLocalStaticRTP(
+	audioTrack, err := webrtc.NewTrackLocalStaticRTP(
 		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypePCMU},
 		fmt.Sprintf("audio-%d", rand.Uint32()),
 		fmt.Sprintf("rtc-%d", rand.Uint32()),
@@ -168,11 +256,42 @@ func (c *WebRTCTransport) CreateOffer() (*Desc, error) {
 
 	if err != nil {
 		logger.Errorf("NewTrack: panic => %v", err)
-		return nil, err
+		return err
 	}
 
-	if _, err = c.pc.AddTrack(c.track); err != nil {
+	if _, err = c.pc.AddTrack(audioTrack); err != nil {
 		logger.Errorf("AddTrack: panic => %v", err)
+		return err
+	}
+
+	c.localTracks[TrackTypeAudio] = audioTrack
+
+	videoTrack, err := webrtc.NewTrackLocalStaticRTP(
+		webrtc.RTPCodecCapability{MimeType: mimeTypeH264},
+		fmt.Sprintf("video-%d", rand.Uint32()),
+		fmt.Sprintf("rtc-%d", rand.Uint32()),
+	)
+
+	if err != nil {
+		logger.Errorf("NewTrack: panic => %v", err)
+		return err
+	}
+
+	if _, err = c.pc.AddTrack(videoTrack); err != nil {
+		logger.Errorf("AddTrack: panic => %v", err)
+		return err
+	}
+
+	c.localTracks[TrackTypeVideo] = videoTrack
+
+	return nil
+}
+
+func (c *WebRTCTransport) CreateOffer() (*Desc, error) {
+
+	err := c.AddLocalTracks()
+	if err != nil {
+		logger.Errorf("AddLocalTracks: panic => %v", err)
 		return nil, err
 	}
 
@@ -205,39 +324,9 @@ func (c *WebRTCTransport) OnAnswer(answer *Desc) error {
 
 func (c *WebRTCTransport) OnOffer(offer *Desc) error {
 
-	c.pc.OnTrack(func(track *webrtc.TrackRemote, recevier *webrtc.RTPReceiver) {
-		buf := make([]byte, 1500)
-		for {
-			if c.closed.Get() {
-				logger.Infof("OnTrack: stop now!")
-				break
-			}
-			// Read
-			n, _, readErr := track.Read(buf)
-			if readErr != nil {
-				logger.Errorf("track.Read: readErr => %v", readErr)
-				break
-			}
-			logger.Infof("OnTrack: read %d bytes", n)
-			///TODO: c.stream.OnReadPacket(buf[:n], false)
-		}
-
-	})
-
-	var err error = nil
-	c.track, err = webrtc.NewTrackLocalStaticRTP(
-		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypePCMU},
-		fmt.Sprintf("audio-%d", rand.Uint32()),
-		fmt.Sprintf("audio-%d", rand.Uint32()),
-	)
-
+	err := c.AddLocalTracks()
 	if err != nil {
-		logger.Errorf("NewTrack: panic => %v", err)
-		return err
-	}
-
-	if _, err = c.pc.AddTrack(c.track); err != nil {
-		logger.Errorf("AddTrack: panic => %v", err)
+		logger.Errorf("AddLocalTracks: panic => %v", err)
 		return err
 	}
 

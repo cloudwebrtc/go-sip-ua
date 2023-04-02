@@ -11,17 +11,17 @@ import (
 
 // UdpPort .
 type UdpPort struct {
-	udpConns                 []*net.UDPConn
-	closed                   utils.AtomicBool
-	ctx                      context.Context
-	cancel                   context.CancelFunc
-	onRtpPacketReceivedFunc  func(packet []byte, raddr net.Addr)
-	onRtcpPacketReceivedFunc func(packet []byte, raddr net.Addr)
-	mutex                    sync.Mutex
-	trackType                TrackType
-	externalRtpAddress       string
-	rAddr                    *net.Addr
-	rRtcpAddr                *net.Addr
+	udpConns             []*net.UDPConn
+	closed               utils.AtomicBool
+	ctx                  context.Context
+	cancel               context.CancelFunc
+	onRtpPacketCallback  func(trackType TrackType, packet []byte, raddr net.Addr) error
+	onRtcpPacketCallback func(trackType TrackType, packet []byte, raddr net.Addr) error
+	mutex                sync.Mutex
+	trackType            TrackType
+	externalRtpAddress   string
+	rAddr                *net.Addr
+	rRtcpAddr            *net.Addr
 }
 
 func NewUdpPort(trackType TrackType, externalRtpAddress string) (*UdpPort, error) {
@@ -49,23 +49,27 @@ func (c *UdpPort) Init() error {
 	go c.loop(rtpConns[0], func(packet []byte, raddr net.Addr) {
 		c.mutex.Lock()
 		defer c.mutex.Unlock()
-		if c.onRtpPacketReceivedFunc != nil {
-			c.onRtpPacketReceivedFunc(packet, raddr)
-		}
 		c.rAddr = &raddr
+		if c.onRtpPacketCallback != nil {
+			c.onRtpPacketCallback(c.trackType, packet, raddr)
+		}
 	})
 
 	go c.loop(rtpConns[1], func(packet []byte, raddr net.Addr) {
 		c.mutex.Lock()
 		defer c.mutex.Unlock()
-		if c.onRtcpPacketReceivedFunc != nil {
-			c.onRtcpPacketReceivedFunc(packet, raddr)
-		}
 		c.rRtcpAddr = &raddr
+		if c.onRtcpPacketCallback != nil {
+			c.onRtcpPacketCallback(c.trackType, packet, raddr)
+		}
 	})
 
 	c.udpConns = rtpConns
 	return nil
+}
+
+func (c *UdpPort) GetTrackType() TrackType {
+	return c.trackType
 }
 
 func (c *UdpPort) LocalPort() int {
@@ -99,38 +103,36 @@ func (c *UdpPort) Close() {
 
 }
 
-func (c *UdpPort) OnRtpPacketReceived(callback func(packet []byte, raddr net.Addr)) {
+func (c *UdpPort) OnRtpPacketReceived(callback func(trackType TrackType, packet []byte, raddr net.Addr) error) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
-	c.onRtpPacketReceivedFunc = callback
+	c.onRtpPacketCallback = callback
 }
 
-func (c *UdpPort) OnRtcpPacketReceived(callback func(packet []byte, raddr net.Addr)) {
+func (c *UdpPort) OnRtcpPacketReceived(callback func(trackType TrackType, packet []byte, raddr net.Addr) error) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
-	c.onRtcpPacketReceivedFunc = callback
+	c.onRtcpPacketCallback = callback
 }
 
-func (c *UdpPort) WriteRtpPacket(data []byte, raddr net.Addr) error {
+func (c *UdpPort) WriteRtpPacket(data []byte, raddr net.Addr) (int, error) {
 	if c.closed.Get() {
-		return fmt.Errorf("closed")
+		return 0, fmt.Errorf("closed")
 	}
 	if c.udpConns != nil {
-		_, err := c.udpConns[0].WriteToUDP(data, raddr.(*net.UDPAddr))
-		return err
+		return c.udpConns[0].WriteToUDP(data, raddr.(*net.UDPAddr))
 	}
-	return nil
+	return 0, fmt.Errorf("udpConns is nil")
 }
 
-func (c *UdpPort) WriteRtcpPacket(data []byte, raddr net.Addr) error {
+func (c *UdpPort) WriteRtcpPacket(data []byte, raddr net.Addr) (int, error) {
 	if c.closed.Get() {
-		return fmt.Errorf("closed")
+		return 0, fmt.Errorf("closed")
 	}
 	if c.udpConns != nil {
-		_, err := c.udpConns[1].WriteToUDP(data, raddr.(*net.UDPAddr))
-		return err
+		return c.udpConns[1].WriteToUDP(data, raddr.(*net.UDPAddr))
 	}
-	return nil
+	return 0, fmt.Errorf("udpConns is nil")
 }
 
 func (c *UdpPort) loop(conn *net.UDPConn, onPacketReceived func(data []byte, raddr net.Addr)) {
@@ -145,7 +147,7 @@ func (c *UdpPort) loop(conn *net.UDPConn, onPacketReceived func(data []byte, rad
 			logger.Infof("RTP Conn [%v] refused, stop now!", raddr)
 			return
 		}
-		logger.Debugf("raddr: %v, size %d", raddr, n)
+		//logger.Infof("raddr: %v, size %d", raddr, n)
 		onPacketReceived(buf[:n], raddr)
 	}
 }

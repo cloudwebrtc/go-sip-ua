@@ -2,8 +2,11 @@ package b2bua
 
 import (
 	"net"
+	"sync"
 	"time"
 
+	"github.com/ghettovoice/gosip/util"
+	"github.com/pion/rtcp"
 	"github.com/pixelbender/go-sdp/sdp"
 )
 
@@ -12,6 +15,10 @@ type UdpTansport struct {
 	ports             map[TrackType]*UdpPort
 	localDescription  *sdp.Session
 	remoteDescription *sdp.Session
+
+	mu          sync.RWMutex
+	rtpHandler  func(trackType TrackType, payload []byte)
+	rtcpHandler func(trackType TrackType, payload []byte)
 }
 
 func NewUdpTansport(trackInfos []*TrackInfo) *UdpTansport {
@@ -23,83 +30,113 @@ func NewUdpTansport(trackInfos []*TrackInfo) *UdpTansport {
 
 func (c *UdpTansport) Init(config CallConfig) error {
 
-	for _, trackInfo := range c.trackInfos {
-		udpPort, err := NewUdpPort(trackInfo.TrackType, config.ExternalRtpAddress)
-		if err != nil {
-			return err
+	host := callConfig.ExternalRtpAddress
+
+	if host == "" || host == "0.0.0.0" {
+		if v, err := util.ResolveSelfIP(); err == nil {
+			host = v.String()
 		}
-		udpPort.Init()
-		udpPort.OnRtpPacketReceived(func(packet []byte, raddr net.Addr) {
-			c.OnRtpPacketReceived(trackInfo.TrackType, packet, raddr)
-		})
-		udpPort.OnRtcpPacketReceived(func(packet []byte, raddr net.Addr) {
-			c.OnRtcpPacketReceived(trackInfo.TrackType, packet, raddr)
-		})
-		c.ports[trackInfo.TrackType] = udpPort
 	}
 
 	c.localDescription = &sdp.Session{
 		Origin: &sdp.Origin{
 			Username:       "-",
-			Address:        callConfig.ExternalRtpAddress,
+			Address:        host,
 			SessionID:      time.Now().UnixNano() / 1e6,
 			SessionVersion: time.Now().UnixNano() / 1e6,
 		},
 		Timing: &sdp.Timing{Start: time.Time{}, Stop: time.Time{}},
 		//Name: "Example",
 		Connection: &sdp.Connection{
-			Address: callConfig.ExternalRtpAddress,
+			Address: host,
 		},
 		//Bandwidth: []*sdp.Bandwidth{{Type: "AS", Value: 117}},
-		Media: []*sdp.Media{
-			{
-				//Bandwidth: []*sdp.Bandwidth{{Type: "TIAS", Value: 96000}},
-				Connection: []*sdp.Connection{{Address: callConfig.ExternalRtpAddress}},
-				Mode:       sdp.SendRecv,
-				Type:       "audio",
-				Port:       c.ports[TrackTypeAudio].LocalPort(),
-				Proto:      "RTP/AVP",
-				Format: []*sdp.Format{
-					{Payload: 0, Name: "PCMU", ClockRate: 8000},
-					{Payload: 8, Name: "PCMA", ClockRate: 8000},
-					//{Payload: 18, Name: "G729", ClockRate: 8000, Params: []string{"annexb=yes"}},
-					{Payload: 116, Name: "telephone-event", ClockRate: 8000, Params: []string{"0-16"}},
-				},
-			},
-			{
-				//Bandwidth: []*sdp.Bandwidth{{Type: "TIAS", Value: 96000}},
-				Connection: []*sdp.Connection{{Address: callConfig.ExternalRtpAddress}},
-				Mode:       sdp.SendRecv,
-				Type:       "video",
-				Port:       c.ports[TrackTypeVideo].LocalPort(),
-				Proto:      "RTP/AVP",
-				Format: []*sdp.Format{
-					{Payload: 96, Name: "H264", ClockRate: 90000, Params: []string{"packetization-mode=1"}},
-				},
-			},
-		},
+	}
+
+	var medias []*sdp.Media
+
+	for _, trackInfo := range c.trackInfos {
+		udpPort, err := NewUdpPort(trackInfo.TrackType, config.ExternalRtpAddress)
+		if err != nil {
+			return err
+		}
+		udpPort.Init()
+		udpPort.OnRtpPacketReceived(c.onRtpPacket)
+		udpPort.OnRtcpPacketReceived(c.onRtcpPacket)
+		c.ports[trackInfo.TrackType] = udpPort
+
+		media := &sdp.Media{}
+		media.Type = string(trackInfo.TrackType)
+		media.Port = udpPort.LocalPort()
+		media.Proto = "RTP/AVP"
+		media.Mode = sdp.SendRecv
+		media.Connection = []*sdp.Connection{{Address: host}}
+		//Bandwidth: []*sdp.Bandwidth{{Type: "TIAS", Value: 96000}},
+
+		var formats []*sdp.Format
+		for _, codec := range trackInfo.Codecs {
+			for _, enabledCodec := range callConfig.Codecs {
+				if codec.Name == enabledCodec {
+					formats = append(formats, &sdp.Format{
+						Payload:   codec.Payload,
+						Name:      codec.Name,
+						ClockRate: codec.ClockRate,
+						Params:    codec.Params,
+					})
+				}
+			}
+
+		}
+		media.Format = formats
+		medias = append(medias, media)
+	}
+
+	c.localDescription.Media = medias
+	return nil
+}
+
+func (c *UdpTansport) OnRtpPacket(rtpHandler func(trackType TrackType, payload []byte)) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.rtpHandler = rtpHandler
+}
+
+func (c *UdpTansport) OnRtcpPacket(rtcpHandler func(trackType TrackType, payload []byte)) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.rtcpHandler = rtcpHandler
+}
+
+func (c *UdpTansport) onRtpPacket(trackType TrackType, packet []byte, raddr net.Addr) error {
+	logger.Infof("UdpTansport::OnRtpPacketReceived: %v read %d bytes, raddr %v", trackType, len(packet), raddr)
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.rtpHandler != nil {
+		c.rtpHandler(trackType, packet)
 	}
 	return nil
 }
 
-func (c *UdpTansport) OnRtpPacketReceived(trackType TrackType, packet []byte, raddr net.Addr) error {
+func (c *UdpTansport) onRtcpPacket(trackType TrackType, packet []byte, raddr net.Addr) error {
+	logger.Infof("UdpTansport::OnRtcpPacketReceived: %v read %d bytes, raddr %v", trackType, len(packet), raddr)
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.rtcpHandler != nil {
+		c.rtcpHandler(trackType, packet)
+	}
 	return nil
 }
 
-func (c *UdpTansport) OnRtcpPacketReceived(trackType TrackType, packet []byte, raddr net.Addr) error {
-	return nil
+func (c *UdpTansport) WriteRTP(trackType TrackType, packet []byte) (int, error) {
+	port := c.ports[trackType]
+	raddr := port.GetRemoteRtpAddress()
+	return port.WriteRtpPacket(packet, *raddr)
 }
 
-func (c UdpTansport) WriteRtpPacket(trackType TrackType, packet []byte) error {
-	udpPort := c.ports[trackType]
-	raddr := udpPort.GetRemoteRtpAddress()
-	return udpPort.WriteRtpPacket(packet, *raddr)
-}
-
-func (c UdpTansport) WriteRtcpPacket(trackType TrackType, packet []byte) error {
-	udpPort := c.ports[trackType]
-	raddr := udpPort.GetRemoteRtcpAddress()
-	return udpPort.WriteRtpPacket(packet, *raddr)
+func (c *UdpTansport) WriteRTCP(trackType TrackType, packet []byte) (int, error) {
+	port := c.ports[trackType]
+	raddr := port.GetRemoteRtcpAddress()
+	return port.WriteRtcpPacket(packet, *raddr)
 }
 
 func (c *UdpTansport) Type() TransportType {
@@ -126,6 +163,24 @@ func (c *UdpTansport) OnAnswer(answer *Desc) error {
 	if err != nil {
 		return err
 	}
+	/*
+		=0
+		o=100 703 1242 IN IP4 192.168.1.154
+		s=Talk
+		c=IN IP4 192.168.1.154
+		t=0 0
+		m=audio 40063 RTP/AVP 0 8 116
+		a=rtpmap:116 telephone-event/8000
+		a=rtcp:49374
+		m=video 47878 RTP/AVP 96
+		a=rtpmap:96 H264/90000
+		a=fmtp:96 profile-level-id=42801F; packetization-mode=1
+		a=rtcp:37679
+	*/
+	conn := sess.Connection
+	if conn != nil {
+		logger.Infof("remote connection address: %s", conn.Address)
+	}
 	c.remoteDescription = sess
 	return nil
 }
@@ -145,4 +200,24 @@ func (c *UdpTansport) CreateAnswer() (*Desc, error) {
 		Type: "offer",
 		SDP:  c.localDescription.String(),
 	}, nil
+}
+
+func (c *UdpTansport) RequestKeyFrame(ssrc uint32) error {
+	go func() {
+		ticker := time.NewTicker(time.Second * 3)
+		for range ticker.C {
+			pli := rtcp.PictureLossIndication{MediaSSRC: uint32(ssrc)}
+			buf, err := pli.Marshal()
+			if err != nil {
+				logger.Error(err)
+				return
+			}
+			_, errSend := c.WriteRTCP(TrackTypeVideo, buf)
+			if errSend != nil {
+				logger.Error(errSend)
+				return
+			}
+		}
+	}()
+	return nil
 }
