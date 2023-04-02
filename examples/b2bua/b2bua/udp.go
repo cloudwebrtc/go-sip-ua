@@ -7,6 +7,7 @@ import (
 
 	"github.com/ghettovoice/gosip/util"
 	"github.com/pion/rtcp"
+	"github.com/pion/rtp"
 	"github.com/pixelbender/go-sdp/sdp"
 )
 
@@ -82,7 +83,7 @@ func (c *UdpTansport) Init(config CallConfig) error {
 						Name:      codec.Name,
 						ClockRate: codec.ClockRate,
 						Params:    codec.Params,
-						Feedback:  codec.Feedback,
+						//Feedback:  codec.Feedback,
 					})
 				}
 			}
@@ -129,14 +130,50 @@ func (c *UdpTansport) onRtcpPacket(trackType TrackType, packet []byte, raddr net
 }
 
 func (c *UdpTansport) WriteRTP(trackType TrackType, packet []byte) (int, error) {
+
+	p := &rtp.Packet{}
+	if err := p.Unmarshal(packet); err != nil {
+
+	}
+	logger.Infof("WebRTCTransport::OnRtpPacketReceived: %v read %d bytes, seq %d, ts %d", trackType, len(packet), p.SequenceNumber, p.Timestamp)
+	p.Extension = false
+	p.ExtensionProfile = 0
+	p.Extensions = nil
+	p.Padding = false
+	p.PaddingSize = 0
+	if trackType == TrackTypeVideo {
+		p.PayloadType = 98
+	}
+
+	pktbuf, err := p.Marshal()
+
+	if err != nil {
+		logger.Errorf("Marshal rtp receiver packets err %v", err)
+	}
+
 	port := c.ports[trackType]
 	raddr := port.GetRemoteRtpAddress()
-	return port.WriteRtpPacket(packet, *raddr)
+	if raddr == nil {
+		logger.Errorf("raddr is nil")
+		return 0, nil
+	}
+	return port.WriteRtpPacket(pktbuf, *raddr)
 }
 
 func (c *UdpTansport) WriteRTCP(trackType TrackType, packet []byte) (int, error) {
+
+	pkts, err := rtcp.Unmarshal(packet)
+	if err != nil {
+		logger.Errorf("Unmarshal rtcp receiver packets err %v", err)
+	}
+	logger.Infof("WebRTCTransport::OnRtcpPacketReceived: %v read %d packets", trackType, len(pkts))
+
 	port := c.ports[trackType]
 	raddr := port.GetRemoteRtcpAddress()
+	if raddr == nil {
+		logger.Errorf("raddr is nil")
+		return 0, nil
+	}
 	return port.WriteRtcpPacket(packet, *raddr)
 }
 

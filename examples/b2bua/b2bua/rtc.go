@@ -187,6 +187,7 @@ func (c *WebRTCTransport) OnRtcpPacket(rtcpHandler func(trackType TrackType, pay
 
 func (c *WebRTCTransport) onRtpPacket(trackType TrackType, packet []byte) error {
 	logger.Debugf("WebRTCTransport::OnRtpPacketReceived: %v read %d bytes", trackType, len(packet))
+
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	if c.rtpHandler != nil {
@@ -197,6 +198,7 @@ func (c *WebRTCTransport) onRtpPacket(trackType TrackType, packet []byte) error 
 
 func (c *WebRTCTransport) onRtcpPacket(trackType TrackType, packet []byte) error {
 	logger.Debugf("WebRTCTransport::OnRtcpPacketReceived: %v read %d bytes", trackType, len(packet))
+
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	if c.rtcpHandler != nil {
