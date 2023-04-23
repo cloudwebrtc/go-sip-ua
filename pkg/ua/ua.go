@@ -28,8 +28,8 @@ type SessionKey struct {
 // NewSessionKey - Build a Session Key quickly
 func NewSessionKey(callID sip.CallID, branchID sip.MaybeString) SessionKey {
 	return SessionKey{
-		CallID:   callID,
-		BranchID: branchID,
+		CallID: callID,
+		//BranchID: branchID,
 	}
 }
 
@@ -38,13 +38,13 @@ type UserAgentConfig struct {
 	SipStack *stack.SipStack
 }
 
-//InviteSessionHandler .
+// InviteSessionHandler .
 type InviteSessionHandler func(s *session.Session, req *sip.Request, resp *sip.Response, status session.Status)
 
-//RegisterHandler .
+// RegisterHandler .
 type RegisterHandler func(regState account.RegisterState)
 
-//UserAgent .
+// UserAgent .
 type UserAgent struct {
 	InviteStateHandler   InviteSessionHandler
 	RegisterStateHandler RegisterHandler
@@ -53,7 +53,7 @@ type UserAgent struct {
 	log                  log.Logger
 }
 
-//NewUserAgent .
+// NewUserAgent .
 func NewUserAgent(config *UserAgentConfig) *UserAgent {
 	ua := &UserAgent{
 		config:               config,

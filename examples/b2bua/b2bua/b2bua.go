@@ -19,16 +19,6 @@ import (
 	"github.com/ghettovoice/gosip/transport"
 )
 
-type B2BCall struct {
-	src *session.Session
-	//TODO: Add support for forked calls
-	dest *session.Session
-}
-
-func (b *B2BCall) ToString() string {
-	return b.src.Contact() + " => " + b.dest.Contact()
-}
-
 func pushCallback(pn *registry.PNParams, payload map[string]string) error {
 	fmt.Printf("Handle Push Request:\nprovider=%v\nparam=%v\nprid=%v\npayload=%v", pn.Provider, pn.Param, pn.PRID, payload)
 	switch pn.Provider {
@@ -48,20 +38,25 @@ type B2BUA struct {
 	ua       *ua.UserAgent
 	accounts map[string]string
 	registry registry.Registry
-	domains  []string
 	calls    []*B2BCall
 	rfc8599  *registry.RFC8599
 }
 
 var (
-	logger log.Logger
+	logger     log.Logger
+	callConfig CallConfig
 )
 
 func init() {
 	logger = utils.NewLogrusLogger(log.InfoLevel, "B2BUA", nil)
+	callConfig = CallConfig{
+		Codecs:             []string{"PCMU", "PCMA", "opus", "H264"},
+		ExternalRtpAddress: "0.0.0.0",
+		RtcpFeedback:       []string{"nack", "nack pli", "ccm fir", "goog-remb", "transport-cc"},
+	}
 }
 
-//NewB2BUA .
+// NewB2BUA .
 func NewB2BUA(disableAuth bool, enableTLS bool) *B2BUA {
 	b := &B2BUA{
 		registry: registry.Registry(registry.NewMemoryRegistry()),
@@ -102,7 +97,7 @@ func NewB2BUA(disableAuth bool, enableTLS bool) *B2BUA {
 			logger.Panic(err)
 		}
 
-		if err := stack.ListenTLS("wss", "0.0.0.0:5081", tlsOptions); err != nil {
+		if err := stack.ListenTLS("wss", "0.0.0.0:8089", tlsOptions); err != nil {
 			logger.Panic(err)
 		}
 	}
@@ -128,6 +123,12 @@ func NewB2BUA(disableAuth bool, enableTLS bool) *B2BUA {
 				if from.DisplayName != nil {
 					displayName = from.DisplayName.String()
 				}
+				call := &B2BCall{src: sess, ua: ua}
+
+				call.Init()
+
+				offer := sess.RemoteSdp()
+				call.SetALegOffer(&Desc{Type: "offer", SDP: offer})
 
 				// Create a temporary profile. In the future, it will support reading profiles from files or data
 				// For example: use a specific ip or sip account as outbound trunk
@@ -138,13 +139,29 @@ func NewB2BUA(disableAuth bool, enableTLS bool) *B2BUA {
 					logger.Error(err2)
 				}
 
-				offer := sess.RemoteSdp()
-				dest, err := ua.Invite(profile, called, recipient, &offer)
+				bLegOffer, _ := call.CreateBLegOffer()
+
+				dest, err := ua.Invite(profile, called, recipient, &bLegOffer.SDP)
 				if err != nil {
 					logger.Errorf("B-Leg session error: %v", err)
 					return
 				}
-				b.calls = append(b.calls, &B2BCall{src: sess, dest: dest})
+
+				call.dest = dest
+
+				b.calls = append(b.calls, call)
+
+				call.SetState(Connecting)
+
+				aLegAnswer, err := call.CreateALegAnswer()
+				if err == nil {
+					call.src.ProvideAnswer(aLegAnswer.SDP)
+				}
+				call.SetState(EarlyMedia)
+				//call.src.Provisional((*resp).StatusCode(), (*resp).Reason())
+				call.src.Accept(200)
+
+				call.BridgeMediaStream()
 			}
 
 			// Try to find online contact records.
@@ -164,7 +181,7 @@ func NewB2BUA(disableAuth bool, enableTLS bool) *B2BUA {
 				instance, err := pusher.WaitContactOnline()
 				if err != nil {
 					logger.Errorf("Push failed, error: %v", err)
-					sess.Reject(500, fmt.Sprint("Push failed"))
+					sess.Reject(500, "Push failed")
 					return
 				}
 				doInvite(instance)
@@ -190,9 +207,10 @@ func NewB2BUA(disableAuth bool, enableTLS bool) *B2BUA {
 		case session.Provisional:
 			call := b.findCall(sess)
 			if call != nil && call.dest == sess {
-				answer := call.dest.RemoteSdp()
-				call.src.ProvideAnswer(answer)
-				call.src.Provisional((*resp).StatusCode(), (*resp).Reason())
+				//answer := call.dest.RemoteSdp()
+
+				//call.SetBLegAnswer(&Desc{Type: "answer", SDP: answer})
+
 			}
 
 		// Handle 200OK or ACK
@@ -201,8 +219,12 @@ func NewB2BUA(disableAuth bool, enableTLS bool) *B2BUA {
 			call := b.findCall(sess)
 			if call != nil && call.dest == sess {
 				answer := call.dest.RemoteSdp()
-				call.src.ProvideAnswer(answer)
-				call.src.Accept(200)
+				call.SetBLegAnswer(&Desc{Type: "answer", SDP: answer})
+				//aLegAnswer, _ := call.CreateALegAnswer()
+				//call.src.ProvideAnswer(aLegAnswer.SDP)
+
+				call.SetState(Confirmed)
+
 			}
 
 		// Handle 4XX+
@@ -214,12 +236,9 @@ func NewB2BUA(disableAuth bool, enableTLS bool) *B2BUA {
 			//TODO: Add support for forked calls
 			call := b.findCall(sess)
 			if call != nil {
-				if call.src == sess {
-					call.dest.End()
-				} else if call.dest == sess {
-					call.src.End()
-				}
+				call.Terminate(sess)
 			}
+
 			b.removeCall(sess)
 
 		}
@@ -257,7 +276,7 @@ func (b *B2BUA) removeCall(sess *session.Session) {
 	}
 }
 
-//Shutdown .
+// Shutdown .
 func (b *B2BUA) Shutdown() {
 	b.ua.Shutdown()
 }
@@ -287,22 +306,22 @@ func (b *B2BUA) requiresChallenge(req sip.Request) bool {
 	return false
 }
 
-//AddAccount .
+// AddAccount .
 func (b *B2BUA) AddAccount(username string, password string) {
 	b.accounts[username] = password
 }
 
-//GetAccounts .
+// GetAccounts .
 func (b *B2BUA) GetAccounts() map[string]string {
 	return b.accounts
 }
 
-//GetRegistry .
+// GetRegistry .
 func (b *B2BUA) GetRegistry() registry.Registry {
 	return b.registry
 }
 
-//GetRFC8599 .
+// GetRFC8599 .
 func (b *B2BUA) GetRFC8599() *registry.RFC8599 {
 	return b.rfc8599
 }
