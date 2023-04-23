@@ -2,6 +2,7 @@ package b2bua
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"sync"
 	"time"
@@ -19,9 +20,10 @@ type UdpTansport struct {
 	localDescription  *sdp.Session
 	remoteDescription *sdp.Session
 
-	mu          sync.RWMutex
-	rtpHandler  func(trackType TrackType, payload []byte)
-	rtcpHandler func(trackType TrackType, payload []byte)
+	mu                     sync.RWMutex
+	rtpHandler             func(trackType TrackType, payload []byte)
+	rtcpHandler            func(trackType TrackType, payload []byte)
+	requestKeyFrameHandler func()
 
 	videoSSRC uint32
 	closed    utils.AtomicBool
@@ -82,7 +84,7 @@ func (c *UdpTansport) Init(config CallConfig) error {
 		media.Type = string(trackInfo.TrackType)
 		media.Port = udpPort.LocalPort()
 		media.Proto = "RTP/AVP"
-		media.Mode = sdp.SendRecv
+		media.Mode = sdp.RecvOnly
 		media.Connection = []*sdp.Connection{{Address: host}}
 		//Bandwidth: []*sdp.Bandwidth{{Type: "TIAS", Value: 96000}},
 
@@ -121,8 +123,25 @@ func (c *UdpTansport) OnRtcpPacket(rtcpHandler func(trackType TrackType, payload
 	c.rtcpHandler = rtcpHandler
 }
 
+func (c *UdpTansport) OnRequestKeyFrame(keyHandler func()) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.requestKeyFrameHandler = keyHandler
+}
+
 func (c *UdpTansport) onRtpPacket(trackType TrackType, packet []byte, raddr net.Addr) error {
 	logger.Debugf("UdpTansport::OnRtpPacketReceived: %v read %d bytes, raddr %v", trackType, len(packet), raddr)
+
+	if len(packet) == 8 {
+		pkts, err := rtcp.Unmarshal(packet)
+		if err != nil {
+			logger.Errorf("Unmarshal rtcp receiver packets err %v", err)
+		}
+		for _, pkt := range pkts {
+			logger.Warnf("Unkown packet: %v, pkt %v DestinationSSRC %v", trackType, packet, pkt.DestinationSSRC())
+		}
+		return nil
+	}
 
 	p := &rtp.Packet{}
 	if err := p.Unmarshal(packet); err != nil {
@@ -133,14 +152,21 @@ func (c *UdpTansport) onRtpPacket(trackType TrackType, packet []byte, raddr net.
 
 	if trackType == TrackTypeVideo && c.videoSSRC == 0 {
 		c.videoSSRC = p.SSRC
-		c.RequestKeyFrame(c.videoSSRC)
+		//c.sendPLI(c.videoSSRC)
 	}
 
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	if c.rtpHandler != nil {
-		c.rtpHandler(trackType, packet)
+	if len(packet) < 12 {
+		if c.rtcpHandler != nil {
+			c.rtcpHandler(trackType, packet)
+		}
+	} else {
+		if c.rtpHandler != nil {
+			c.rtpHandler(trackType, packet)
+		}
 	}
+
 	return nil
 }
 
@@ -168,15 +194,13 @@ func (c *UdpTansport) WriteRTP(trackType TrackType, packet []byte) (int, error) 
 	p.Padding = false
 	p.PaddingSize = 0
 
-	if trackType == TrackTypeVideo {
-		p.PayloadType = 98
-	}
-
 	pktbuf, err := p.Marshal()
 
 	if err != nil {
 		logger.Errorf("Marshal rtp receiver packets err %v", err)
 	}
+
+	return 0, nil
 
 	port := c.ports[trackType]
 	raddr := port.GetRemoteRtpAddress()
@@ -204,7 +228,7 @@ func (c *UdpTansport) WriteRTCP(trackType TrackType, packet []byte) (int, error)
 		logger.Errorf("raddr is nil")
 		raddr = port.GetRemoteRtpAddress()
 	}
-	logger.Infof("UdpTansport::WriteRTCP: %v read %d packets, raddr %v", trackType, len(pkts), *raddr)
+	logger.Debugf("UdpTansport::WriteRTCP: %v read %d packets, raddr %v", trackType, len(pkts), *raddr)
 	return port.WriteRtcpPacket(packet, *raddr)
 }
 
@@ -213,18 +237,6 @@ func (c *UdpTansport) Type() TransportType {
 }
 
 func (c *UdpTansport) Close() error {
-
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	c.rtcpHandler = nil
-	c.rtpHandler = nil
-
-	if !c.closed.Get() {
-		c.closed.Set(true)
-	}
-	c.cancel()
-
 	for _, udpPort := range c.ports {
 		udpPort.Close()
 	}
@@ -283,15 +295,34 @@ func (c *UdpTansport) CreateAnswer() (*Desc, error) {
 	}, nil
 }
 
-func (c *UdpTansport) RequestKeyFrame(ssrc uint32) error {
+func (c *UdpTansport) RequestKeyFrame() error {
+	if c.videoSSRC == 0 {
+		return fmt.Errorf("video ssrc is 0")
+	}
+	pli := rtcp.PictureLossIndication{SenderSSRC: uint32(0), MediaSSRC: uint32(c.videoSSRC)}
+	buf, err := pli.Marshal()
+	if err != nil {
+		logger.Error(err)
+		return err
+	}
+	_, errSend := c.WriteRTCP(TrackTypeVideo, buf)
+	if errSend != nil {
+		logger.Error(errSend)
+		return errSend
+	}
+	logger.Infof("RequestKeyFrame: Sent PLI %v", pli)
+	return nil
+}
+
+func (c *UdpTansport) sendPLI(ssrc uint32) error {
 	go func() {
-		ticker := time.NewTicker(time.Second * 3)
+		ticker := time.NewTicker(time.Second * 1)
 		for range ticker.C {
 			if c.closed.Get() {
 				logger.Infof("Terminate: stop pli loop now!")
 				return
 			}
-			pli := rtcp.PictureLossIndication{MediaSSRC: uint32(ssrc)}
+			pli := rtcp.PictureLossIndication{SenderSSRC: uint32(0), MediaSSRC: uint32(ssrc)}
 			buf, err := pli.Marshal()
 			if err != nil {
 				logger.Error(err)

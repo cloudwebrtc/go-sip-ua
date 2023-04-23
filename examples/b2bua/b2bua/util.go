@@ -213,6 +213,8 @@ func ListenRTPInPortRange(portMin, portMax int, network string, lRtpAddr *net.UD
 		*lRtpAddr = net.UDPAddr{IP: lRtpAddr.IP, Port: portCurrent}
 		c, e := net.ListenUDP(network, lRtpAddr)
 		if e == nil {
+			c.SetReadBuffer(321024)
+			c.SetWriteBuffer(321024)
 			if conns[0] == nil {
 				conns[0] = c
 			} else {
@@ -222,6 +224,8 @@ func ListenRTPInPortRange(portMin, portMax int, network string, lRtpAddr *net.UD
 			*lRtcpAddr = net.UDPAddr{IP: lRtcpAddr.IP, Port: portCurrent + 1}
 			c, e = net.ListenUDP(network, lRtcpAddr)
 			if e == nil {
+				c.SetReadBuffer(321024)
+				c.SetWriteBuffer(321024)
 				conns[1] = c
 				return conns, e
 			}

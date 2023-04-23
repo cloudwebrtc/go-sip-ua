@@ -152,6 +152,16 @@ func NewB2BUA(disableAuth bool, enableTLS bool) *B2BUA {
 				b.calls = append(b.calls, call)
 
 				call.SetState(Connecting)
+
+				aLegAnswer, err := call.CreateALegAnswer()
+				if err == nil {
+					call.src.ProvideAnswer(aLegAnswer.SDP)
+				}
+				call.SetState(EarlyMedia)
+				//call.src.Provisional((*resp).StatusCode(), (*resp).Reason())
+				call.src.Accept(200)
+
+				call.BridgeMediaStream()
 			}
 
 			// Try to find online contact records.
@@ -197,18 +207,9 @@ func NewB2BUA(disableAuth bool, enableTLS bool) *B2BUA {
 		case session.Provisional:
 			call := b.findCall(sess)
 			if call != nil && call.dest == sess {
-				answer := call.dest.RemoteSdp()
-				if len(answer) > 0 {
-					call.SetBLegAnswer(&Desc{Type: "answer", SDP: answer})
-					aLegAnswer, err := call.CreateALegAnswer()
-					if err == nil {
-						call.src.ProvideAnswer(aLegAnswer.SDP)
-					}
-					call.SetState(EarlyMedia)
-				} else {
-					call.SetState(Ringing)
-				}
-				call.src.Provisional((*resp).StatusCode(), (*resp).Reason())
+				//answer := call.dest.RemoteSdp()
+
+				//call.SetBLegAnswer(&Desc{Type: "answer", SDP: answer})
 
 			}
 
@@ -219,11 +220,11 @@ func NewB2BUA(disableAuth bool, enableTLS bool) *B2BUA {
 			if call != nil && call.dest == sess {
 				answer := call.dest.RemoteSdp()
 				call.SetBLegAnswer(&Desc{Type: "answer", SDP: answer})
-				aLegAnswer, _ := call.CreateALegAnswer()
-				call.src.ProvideAnswer(aLegAnswer.SDP)
-				call.src.Accept(200)
+				//aLegAnswer, _ := call.CreateALegAnswer()
+				//call.src.ProvideAnswer(aLegAnswer.SDP)
+
 				call.SetState(Confirmed)
-				call.BridgeMediaStream()
+
 			}
 
 		// Handle 4XX+

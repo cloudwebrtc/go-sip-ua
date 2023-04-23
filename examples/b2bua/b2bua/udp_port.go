@@ -38,7 +38,7 @@ func (c *UdpPort) Init() error {
 	lAddr := &net.UDPAddr{IP: net.ParseIP("0.0.0.0"), Port: 0}
 	lRtcpAddr := &net.UDPAddr{IP: net.ParseIP("0.0.0.0"), Port: 0}
 
-	rtpConns, err := ListenRTPInPortRange(3000, 5000, "udp", lAddr, lRtcpAddr)
+	rtpConns, err := ListenRTPInPortRange(4000, 5000, "udp", lAddr, lRtcpAddr)
 	if err != nil {
 		logger.Errorf("ListenUDP: err => %v", err)
 		return err

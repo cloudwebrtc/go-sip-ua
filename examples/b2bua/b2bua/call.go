@@ -185,6 +185,12 @@ func (b *B2BCall) BridgeMediaStream() error {
 			logger.Errorf("WriteRTCP[%v] %v error: %v", b.destTrans.Type(), trackType, err)
 		}
 	})
+	b.srcTrans.OnRequestKeyFrame(func() {
+		err := b.destTrans.RequestKeyFrame()
+		if err != nil {
+			logger.Errorf("OnRequestKeyFrame[%v]  error: %v", b.destTrans.Type(), err)
+		}
+	})
 
 	b.destTrans.OnRtpPacket(func(trackType TrackType, payload []byte) {
 		_, err := b.srcTrans.WriteRTP(trackType, payload)
@@ -196,6 +202,12 @@ func (b *B2BCall) BridgeMediaStream() error {
 		_, err := b.srcTrans.WriteRTCP(trackType, payload)
 		if err != nil {
 			logger.Errorf("WriteRTCP[%v] %v error: %v", b.srcTrans.Type(), trackType, err)
+		}
+	})
+	b.destTrans.OnRequestKeyFrame(func() {
+		err := b.srcTrans.RequestKeyFrame()
+		if err != nil {
+			logger.Errorf("OnRequestKeyFrame[%v]  error: %v", b.srcTrans.Type(), err)
 		}
 	})
 	return nil
@@ -221,6 +233,10 @@ type Transport interface {
 	OnRtpPacket(rtpHandler func(trackType TrackType, payload []byte))
 	OnRtcpPacket(rtcpHandler func(trackType TrackType, payload []byte))
 
+	OnRequestKeyFrame(func())
+
 	WriteRTP(trackType TrackType, payload []byte) (int, error)
 	WriteRTCP(trackType TrackType, payload []byte) (int, error)
+
+	RequestKeyFrame() error
 }

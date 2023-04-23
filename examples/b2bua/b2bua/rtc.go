@@ -3,18 +3,24 @@ package b2bua
 import (
 	"context"
 	"fmt"
+	"io"
 	"math/rand"
 	"net"
 	"sync"
 
+	"github.com/cloudwebrtc/go-sip-ua/examples/b2bua/b2bua/buffer"
 	"github.com/cloudwebrtc/go-sip-ua/pkg/utils"
 	"github.com/pion/interceptor"
 	"github.com/pion/rtcp"
+	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v3"
 )
 
+const maxPktSize = 1500
+
 var (
 	webrtcSettings webrtc.SettingEngine
+	MaxPacketTrack = 500
 )
 
 const (
@@ -56,15 +62,36 @@ type WebRTCTransport struct {
 	cancel      context.CancelFunc
 	trackInfos  []*TrackInfo
 
-	mu          sync.RWMutex
-	rtpHandler  func(trackType TrackType, payload []byte)
-	rtcpHandler func(trackType TrackType, payload []byte)
+	videoPool *sync.Pool
+	audioPool *sync.Pool
+
+	sequencer              *sequencer
+	buff                   *buffer.Buffer
+	bmu                    sync.Mutex
+	mu                     sync.RWMutex
+	rtpHandler             func(trackType TrackType, payload []byte)
+	rtcpHandler            func(trackType TrackType, payload []byte)
+	requestKeyFrameHandler func()
 }
 
 func NewWebRTCTransport(trackInfos []*TrackInfo) *WebRTCTransport {
 	c := &WebRTCTransport{
 		trackInfos:  trackInfos,
 		localTracks: make(map[TrackType]*webrtc.TrackLocalStaticRTP),
+		sequencer:   newSequencer(MaxPacketTrack),
+		videoPool: &sync.Pool{
+			New: func() interface{} {
+				b := make([]byte, MaxPacketTrack*maxPktSize)
+				return &b
+			},
+		},
+		audioPool: &sync.Pool{
+			New: func() interface{} {
+				b := make([]byte, maxPktSize*25)
+				return &b
+			},
+		},
+		buff: nil,
 	}
 	c.ctx, c.cancel = context.WithCancel(context.Background())
 	c.closed.Set(false)
@@ -149,6 +176,18 @@ func (c *WebRTCTransport) Init(callConfig CallConfig) error {
 	})
 
 	c.pc.OnTrack(func(track *webrtc.TrackRemote, recevier *webrtc.RTPReceiver) {
+		if track.Kind() == webrtc.RTPCodecTypeVideo {
+			c.bmu.Lock()
+			if c.buff == nil {
+				c.buff = buffer.NewBuffer(uint32(track.SSRC()), c.videoPool, c.audioPool, buffer.Logger)
+				c.buff.Bind(recevier.GetParameters(), buffer.Options{
+					MaxBitRate: 1500,
+				})
+
+				c.buff.OnFeedback(func(fb []rtcp.Packet) {})
+			}
+			c.bmu.Unlock()
+		}
 		buf := make([]byte, 1500)
 		for {
 			if c.closed.Get() {
@@ -185,6 +224,12 @@ func (c *WebRTCTransport) OnRtcpPacket(rtcpHandler func(trackType TrackType, pay
 	c.rtcpHandler = rtcpHandler
 }
 
+func (c *WebRTCTransport) OnRequestKeyFrame(keyHandler func()) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.requestKeyFrameHandler = keyHandler
+}
+
 func (c *WebRTCTransport) onRtpPacket(trackType TrackType, packet []byte) error {
 	logger.Debugf("WebRTCTransport::OnRtpPacketReceived: %v read %d bytes", trackType, len(packet))
 
@@ -217,6 +262,22 @@ func (c *WebRTCTransport) WriteRTP(trackType TrackType, packet []byte) (int, err
 		}
 	} else if trackType == TrackTypeVideo {
 		if c.localTracks[TrackTypeVideo] != nil {
+
+			var pkt rtp.Packet
+			if err := pkt.Unmarshal(packet); err == nil {
+				c.bmu.Lock()
+				if c.buff != nil {
+					c.buff.Write(packet)
+					//pktExt, err := c.buff.ReadExtended()
+					if err != io.EOF {
+						if c.sequencer != nil {
+							c.sequencer.push(pkt.SequenceNumber, pkt.SequenceNumber, pkt.Timestamp, 0, true)
+						}
+					}
+				}
+				c.bmu.Unlock()
+			}
+
 			return c.localTracks[TrackTypeVideo].Write(packet)
 		}
 	}
@@ -394,15 +455,18 @@ func (c *WebRTCTransport) HandleRtcpFb(rtpSender *webrtc.RTPSender) {
 					if pliOnce {
 						fwdPkts = append(fwdPkts, p)
 						logger.Infof("Picture Loss Indication")
-						//hi.CameraSendKeyFrame()
-						buf, _ := p.Marshal()
-						c.onRtcpPacket(TrackTypeVideo, buf)
+						if c.requestKeyFrameHandler != nil {
+							c.requestKeyFrameHandler()
+						}
 						pliOnce = false
 					}
 				case *rtcp.FullIntraRequest:
 					if firOnce {
 						fwdPkts = append(fwdPkts, p)
 						logger.Infof("FullIntraRequest")
+						if c.requestKeyFrameHandler != nil {
+							c.requestKeyFrameHandler()
+						}
 						firOnce = false
 					}
 				case *rtcp.ReceiverEstimatedMaximumBitrate:
@@ -419,14 +483,62 @@ func (c *WebRTCTransport) HandleRtcpFb(rtpSender *webrtc.RTPSender) {
 						}
 					}
 				case *rtcp.TransportLayerNack:
-					logger.Debugf("Nack")
-					buf, _ := p.Marshal()
-					c.onRtcpPacket(TrackTypeVideo, buf)
+					logger.Infof("Nack %v", p)
+					if c.sequencer != nil {
+						var nackedPackets []packetMeta
+						for _, pair := range p.Nacks {
+							nackedPackets = append(nackedPackets, c.sequencer.getSeqNoPairs(pair.PacketList())...)
+						}
+						if len(nackedPackets) > 0 {
+							if err = c.RetransmitPackets(nackedPackets); err == nil {
+								logger.Infof("Nack pair %v", nackedPackets)
+							}
+						} else {
+							buf, _ := p.Marshal()
+							c.onRtcpPacket(TrackTypeVideo, buf)
+						}
+					}
 				}
 			}
 		}
 	}()
+}
 
+func (c *WebRTCTransport) RequestKeyFrame() error {
+	return nil
+}
+
+func (c *WebRTCTransport) RetransmitPackets(nackedPackets []packetMeta) error {
+	c.bmu.Lock()
+	defer c.bmu.Unlock()
+	if c.buff == nil {
+		return fmt.Errorf("buffer is nil")
+	}
+	for _, meta := range nackedPackets {
+		pktBuff := make([]byte, 1500)
+		i, err := c.buff.GetPacket(pktBuff, meta.sourceSeqNo)
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			continue
+		}
+		var pkt rtp.Packet
+		if err = pkt.Unmarshal(pktBuff[:i]); err != nil {
+			continue
+		}
+		pkt.Header.SequenceNumber = meta.targetSeqNo
+		//pkt.Header.Timestamp = meta.timestamp
+		//pkt.Header.SSRC = track.ssrc
+		//pkt.Header.PayloadType = track.payloadType
+		//if _, err = track.writeStream.WriteRTP(&pkt.Header, pkt.Payload); err != nil {
+		//	logger.Error(err, "Writing rtx packet err")
+		//}
+		packet, _ := pkt.Marshal()
+		c.localTracks[TrackTypeVideo].Write(packet)
+
+	}
+	return nil
 }
 
 // InitWebRTC init WebRTCTransport setting
