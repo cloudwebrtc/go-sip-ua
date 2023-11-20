@@ -210,7 +210,7 @@ func (s *Session) GetEarlyMedia() string {
 	return s.answer
 }
 
-//ProvideOffer .
+// ProvideOffer .
 func (s *Session) ProvideOffer(sdp string) {
 	s.offer = sdp
 }
@@ -220,7 +220,7 @@ func (s *Session) ProvideAnswer(sdp string) {
 	s.answer = sdp
 }
 
-//Info send SIP INFO
+// Info send SIP INFO
 func (s *Session) Info(content string, contentType string) {
 	method := sip.INFO
 	req := s.makeRequest(s.uaType, method, sip.MessageID(s.callID), s.request, s.response)
@@ -230,7 +230,7 @@ func (s *Session) Info(content string, contentType string) {
 	s.sendRequest(req)
 }
 
-//ReInvite send re-INVITE
+// ReInvite send re-INVITE
 func (s *Session) ReInvite() {
 	method := sip.INVITE
 	req := s.makeRequest(s.uaType, method, sip.MessageID(s.callID), s.request, s.response)
@@ -240,7 +240,7 @@ func (s *Session) ReInvite() {
 	s.sendRequest(req)
 }
 
-//Bye send Bye request.
+// Bye send Bye request.
 func (s *Session) Bye() (sip.Response, error) {
 	req := s.makeRequest(s.uaType, sip.BYE, sip.MessageID(s.callID), s.request, s.response)
 	return s.sendRequest(req)
@@ -261,7 +261,7 @@ func (s *Session) Reject(statusCode sip.StatusCode, reason string) {
 	tx.Respond(response)
 }
 
-//End end session
+// End end session
 func (s *Session) End() error {
 
 	if s.status == Terminated {
@@ -333,8 +333,17 @@ func (s *Session) Accept(statusCode sip.StatusCode) {
 }
 
 // Redirect send a 3xx
-func (s *Session) Redirect(target string, code sip.StatusCode) {
+func (s *Session) Redirect(target sip.Uri, code sip.StatusCode, reason string) {
+	tx := (s.transaction.(sip.ServerTransaction))
+	request := s.request
 
+	s.Log().Debugf("Redirect: Request => %s, body => %s", request.Short(), request.Body())
+
+	response := sip.NewResponseFromRequest(request.MessageID(), request, code, reason, "")
+	s.contact.Address = target
+	response.AppendHeader(s.contact)
+
+	tx.Respond(response)
 }
 
 // Provisional send a provisional code 100|180|183
