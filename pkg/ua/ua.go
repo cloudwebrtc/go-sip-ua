@@ -234,12 +234,12 @@ func (ua *UserAgent) handleBye(request sip.Request, tx sip.ServerTransaction) {
 
 	tx.Respond(response)
 	callID, ok := request.CallID()
-	toHeader, ok2 := request.To()
+	fromHeader, ok2 := request.From()
 	if ok && ok2 {
-		toTag, _ := toHeader.Params.Get("tag")
-		if v, found := ua.iss.Load(NewSessionKey(*callID, toTag)); found {
+		fromTag, _ := fromHeader.Params.Get("tag")
+		if v, found := ua.iss.Load(NewSessionKey(*callID, fromTag)); found {
 			is := v.(*session.Session)
-			ua.iss.Delete(NewSessionKey(*callID, toTag))
+			ua.iss.Delete(NewSessionKey(*callID, fromTag))
 			var transaction sip.Transaction = tx.(sip.Transaction)
 			ua.handleInviteState(is, &request, &response, session.Terminated, &transaction)
 		}
