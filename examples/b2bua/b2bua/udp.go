@@ -200,8 +200,6 @@ func (c *UdpTansport) WriteRTP(trackType TrackType, packet []byte) (int, error) 
 		logger.Errorf("Marshal rtp receiver packets err %v", err)
 	}
 
-	return 0, nil
-
 	port := c.ports[trackType]
 	raddr := port.GetRemoteRtpAddress()
 	if raddr == nil {

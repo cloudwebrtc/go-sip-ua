@@ -135,6 +135,7 @@ func (b *B2BCall) SetALegOffer(sdp *Desc) error {
 func (b *B2BCall) CreateBLegOffer() (*Desc, error) {
 	//TODO: create transport by b.srcOffer
 	trans := NewUdpTansport(b.srcTrackInfos)
+	//trans := NewWebRTCTransport(b.srcTrackInfos)
 
 	err := trans.Init(callConfig)
 
