@@ -234,16 +234,27 @@ func (ua *UserAgent) handleBye(request sip.Request, tx sip.ServerTransaction) {
 
 	tx.Respond(response)
 	callID, ok := request.CallID()
-	toHeader, ok2 := request.To()
-	if ok && ok2 {
-		toTag, _ := toHeader.Params.Get("tag")
-		if v, found := ua.iss.Load(NewSessionKey(*callID, toTag)); found {
-			is := v.(*session.Session)
-			ua.iss.Delete(NewSessionKey(*callID, toTag))
+	if ok {
+		if sess, sessKey := ua.findSessionByCallID(*callID); sess != nil {
+			ua.iss.Delete(sessKey)
 			var transaction sip.Transaction = tx.(sip.Transaction)
-			ua.handleInviteState(is, &request, &response, session.Terminated, &transaction)
+			ua.handleInviteState(sess, &request, &response, session.Terminated, &transaction)
 		}
 	}
+}
+
+func (ua *UserAgent) findSessionByCallID(callID sip.CallID) (*session.Session, SessionKey) {
+	var ret *session.Session = nil
+	var sessKey SessionKey
+	ua.iss.Range(func(key, value interface{}) bool {
+		if key.(SessionKey).CallID == callID {
+			ret = value.(*session.Session)
+			sessKey = key.(SessionKey)
+			return false
+		}
+		return true
+	})
+	return ret, sessKey
 }
 
 func (ua *UserAgent) handleCancel(request sip.Request, tx sip.ServerTransaction) {
