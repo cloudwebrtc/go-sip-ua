@@ -291,7 +291,7 @@ func (s *SipStack) handleRequest(req sip.Request, tx sip.ServerTransaction) {
 	go handler(req, tx)
 }
 
-//Request Send SIP message
+// Request Send SIP message
 func (s *SipStack) Request(req sip.Request) (sip.ClientTransaction, error) {
 	if !s.running.IsSet() {
 		return nil, fmt.Errorf("can not send through stopped server")
@@ -378,6 +378,7 @@ func (s *SipStack) prepareRequest(req sip.Request) sip.Request {
 			ProtocolName:    "SIP",
 			ProtocolVersion: "2.0",
 			Params: sip.NewParams().
+				Add("rport", nil).
 				Add("branch", sip.String{Str: sip.GenerateBranch()}),
 		}
 
