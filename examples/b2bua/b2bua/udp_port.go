@@ -20,8 +20,8 @@ type UdpPort struct {
 	mutex                sync.Mutex
 	trackType            TrackType
 	externalRtpAddress   string
-	rAddr                *net.Addr
-	rRtcpAddr            *net.Addr
+	rAddr                *net.UDPAddr
+	rRtcpAddr            *net.UDPAddr
 }
 
 func NewUdpPort(trackType TrackType, externalRtpAddress string) (*UdpPort, error) {
@@ -49,7 +49,7 @@ func (c *UdpPort) Init() error {
 	go c.loop(rtpConns[0], func(packet []byte, raddr net.Addr) {
 		c.mutex.Lock()
 		defer c.mutex.Unlock()
-		c.rAddr = &raddr
+		c.rAddr = raddr.(*net.UDPAddr)
 		if c.onRtpPacketCallback != nil {
 			c.onRtpPacketCallback(c.trackType, packet, raddr)
 		}
@@ -58,7 +58,7 @@ func (c *UdpPort) Init() error {
 	go c.loop(rtpConns[1], func(packet []byte, raddr net.Addr) {
 		c.mutex.Lock()
 		defer c.mutex.Unlock()
-		c.rRtcpAddr = &raddr
+		c.rRtcpAddr = raddr.(*net.UDPAddr)
 		if c.onRtcpPacketCallback != nil {
 			c.onRtcpPacketCallback(c.trackType, packet, raddr)
 		}
@@ -76,11 +76,19 @@ func (c *UdpPort) LocalPort() int {
 	return c.udpConns[0].LocalAddr().(*net.UDPAddr).Port
 }
 
-func (c *UdpPort) GetRemoteRtpAddress() *net.Addr {
+func (c *UdpPort) SetRemoteAddress(raddr *net.UDPAddr) {
+	c.rAddr = raddr
+}
+
+func (c *UdpPort) SetRemoteRtcpAddress(raddr *net.UDPAddr) {
+	c.rRtcpAddr = raddr
+}
+
+func (c *UdpPort) GetRemoteRtpAddress() *net.UDPAddr {
 	return c.rAddr
 }
 
-func (c *UdpPort) GetRemoteRtcpAddress() *net.Addr {
+func (c *UdpPort) GetRemoteRtcpAddress() *net.UDPAddr {
 	if c.rRtcpAddr == nil {
 		return c.rAddr
 	}

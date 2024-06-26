@@ -365,6 +365,42 @@ func ParseTransportType(sdp *sdp.Session) TransportType {
 	return TransportTypeSIP
 }
 
+/*
+
+rtpmap:111 opus/48000/2
+a=rtcp-fb:111 transport-cc
+a=fmtp:111 minptime=10;useinbandfec=1
+a=rtpmap:63 red/48000/2
+a=fmtp:63 111/111
+a=rtpmap:9 G722/8000
+a=rtpmap:102 ILBC/8000
+a=rtpmap:0 PCMU/8000
+a=rtpmap:8 PCMA/8000
+a=rtpmap:13 CN/8000
+a=rtpmap:110 telephone-event/48000
+a=rtpmap:126 telephone-event/8000
+*/
+
+var formatMaps = map[uint8]*sdp.Format{
+	0:   {Payload: 0, Name: "PCMU", ClockRate: 8000},
+	8:   {Payload: 8, Name: "PCMA", ClockRate: 8000},
+	9:   {Payload: 9, Name: "G722", ClockRate: 8000},
+	13:  {Payload: 13, Name: "CN", ClockRate: 8000},
+	63:  {Payload: 63, Name: "red", ClockRate: 8000},
+	110: {Payload: 110, Name: "telephone-event", ClockRate: 48000},
+	111: {Payload: 111, Name: "opus", ClockRate: 48000},
+	126: {Payload: 126, Name: "telephone-event", ClockRate: 8000},
+}
+
+func fixFormatName(fmts []*sdp.Format) []*sdp.Format {
+	for _, f := range fmts {
+		if ff, ok := formatMaps[f.Payload]; ok && f.Name == "" {
+			f.Name = ff.Name
+		}
+	}
+	return fmts
+}
+
 func ParseTrackInfos(sdp *sdp.Session) ([]*TrackInfo, error) {
 	if sdp == nil {
 		return nil, errors.New("sdp is nil")
@@ -372,7 +408,13 @@ func ParseTrackInfos(sdp *sdp.Session) ([]*TrackInfo, error) {
 	trackInfos := make([]*TrackInfo, 0)
 	for _, m := range sdp.Media {
 		trackInfo := &TrackInfo{}
-		trackInfo.Codecs = m.Format
+		trackInfo.Connection = sdp.Connection
+		trackInfo.Port = m.Port
+		if trackInfo.Port > 0 {
+			trackInfo.RtcpPort = m.Port + 1
+		}
+
+		trackInfo.Codecs = fixFormatName(m.Format)
 		if m.Type == "audio" {
 			trackInfo.TrackType = TrackTypeAudio
 		} else if m.Type == "video" {

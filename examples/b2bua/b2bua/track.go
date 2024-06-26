@@ -13,6 +13,8 @@ type TrackInfo struct {
 	TrackType  TrackType
 	Codecs     []*sdp.Format
 	Connection *sdp.Connection
+	Port       int
+	RtcpPort   int
 }
 
 type Track interface {
