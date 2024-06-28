@@ -14,6 +14,10 @@ type ContactInstance struct {
 	Transport   string
 }
 
+func (c ContactInstance) SupportIce() bool {
+	return c.Contact.Params.Has("+sip.ice")
+}
+
 func (c *ContactInstance) GetPNParams() *PNParams {
 	params := c.Contact.Address.UriParams()
 	if provider, ok := params.Get("pn-provider"); ok {

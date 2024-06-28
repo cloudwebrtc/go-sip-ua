@@ -396,9 +396,25 @@ func fixFormatName(fmts []*sdp.Format) []*sdp.Format {
 	for _, f := range fmts {
 		if ff, ok := formatMaps[f.Payload]; ok && f.Name == "" {
 			f.Name = ff.Name
+			if f.ClockRate == 0 {
+				f.ClockRate = ff.ClockRate
+			}
+			if f.Channels == 0 {
+				f.Channels = ff.Channels
+			}
 		}
 	}
 	return fmts
+}
+
+func replaceCodec(src *Desc, answer string) error {
+	srcSess, _ := sdp.Parse([]byte(src.SDP))
+	sdpSess, _ := sdp.Parse([]byte(answer))
+	for idx, m := range sdpSess.Media {
+		srcSess.Media[idx].Format = fixFormatName(m.Format)
+	}
+	src.SDP = srcSess.String()
+	return nil
 }
 
 func ParseTrackInfos(sdp *sdp.Session) ([]*TrackInfo, error) {
@@ -409,11 +425,11 @@ func ParseTrackInfos(sdp *sdp.Session) ([]*TrackInfo, error) {
 	for _, m := range sdp.Media {
 		trackInfo := &TrackInfo{}
 		trackInfo.Connection = sdp.Connection
+		trackInfo.Direction = m.Mode
 		trackInfo.Port = m.Port
 		if trackInfo.Port > 0 {
 			trackInfo.RtcpPort = m.Port + 1
 		}
-
 		trackInfo.Codecs = fixFormatName(m.Format)
 		if m.Type == "audio" {
 			trackInfo.TrackType = TrackTypeAudio

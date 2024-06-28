@@ -138,8 +138,11 @@ func NewB2BUA(disableAuth bool, enableTLS bool) *B2BUA {
 				if err2 != nil {
 					logger.Error(err2)
 				}
-
-				bLegOffer, _ := call.CreateBLegOffer()
+				var tpType = TransportTypeSIP
+				if instance.SupportIce() {
+					tpType = TransportTypeRTC
+				}
+				bLegOffer, _ := call.CreateBLegOffer(tpType)
 
 				dest, err := ua.Invite(profile, called, recipient, &bLegOffer.SDP)
 				if err != nil {
@@ -210,19 +213,19 @@ func NewB2BUA(disableAuth bool, enableTLS bool) *B2BUA {
 			if call != nil && call.dest == sess {
 				answer := call.dest.RemoteSdp()
 				call.SetBLegAnswer(&Desc{Type: "answer", SDP: answer})
-				//aLegAnswer, _ := call.CreateALegAnswer()
-				//call.src.ProvideAnswer(aLegAnswer.SDP)
-				aLegAnswer, err := call.CreateALegAnswer()
-				if err == nil {
+				if aLegAnswer, err := call.CreateALegAnswer(); err != nil {
+					logger.Errorf("Create A-Leg Answer failed: %v", err)
+					return
+				} else {
+					replaceCodec(aLegAnswer, answer)
 					call.src.ProvideAnswer(aLegAnswer.SDP)
 				}
+
 				//call.SetState(EarlyMedia)
 				//call.src.Provisional((*resp).StatusCode(), (*resp).Reason())
 				call.src.Accept(200)
-
 				call.BridgeMediaStream()
 				call.SetState(Confirmed)
-
 			}
 
 		// Handle 4XX+

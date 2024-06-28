@@ -98,24 +98,24 @@ func (c *UdpTansport) Init(config CallConfig) error {
 		media.Type = string(trackInfo.TrackType)
 		media.Port = udpPort.LocalPort()
 		media.Proto = "RTP/AVP"
-		media.Mode = sdp.RecvOnly
+		media.Mode = trackInfo.Direction
 		media.Connection = []*sdp.Connection{{Address: host}}
 		//Bandwidth: []*sdp.Bandwidth{{Type: "TIAS", Value: 96000}},
 
 		var formats []*sdp.Format
 		for _, codec := range trackInfo.Codecs {
-			for _, enabledCodec := range callConfig.Codecs {
-				if codec.Name == enabledCodec {
-					formats = append(formats, &sdp.Format{
-						Payload:   codec.Payload,
-						Name:      codec.Name,
-						ClockRate: codec.ClockRate,
-						Params:    codec.Params,
-						//Feedback:  codec.Feedback,
-					})
-				}
-			}
-
+			//for _, enabledCodec := range callConfig.Codecs {
+			//	if codec.Name == enabledCodec {
+			formats = append(formats, &sdp.Format{
+				Payload:   codec.Payload,
+				Name:      codec.Name,
+				ClockRate: codec.ClockRate,
+				Params:    codec.Params,
+				Feedback:  codec.Feedback,
+				Channels:  codec.Channels,
+			})
+			//	}
+			//}
 		}
 		media.Format = formats
 		medias = append(medias, media)

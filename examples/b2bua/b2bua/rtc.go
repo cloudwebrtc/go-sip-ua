@@ -6,6 +6,7 @@ import (
 	"io"
 	"math/rand"
 	"net"
+	"strings"
 	"sync"
 
 	"github.com/cloudwebrtc/go-sip-ua/examples/b2bua/b2bua/buffer"
@@ -106,42 +107,95 @@ func (c *WebRTCTransport) Init(callConfig CallConfig) error {
 	// Create a MediaEngine object to configure the supported codec
 	m := &webrtc.MediaEngine{}
 
-	for _, codec := range []webrtc.RTPCodecParameters{
-		{
-			RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypePCMU, ClockRate: 8000, Channels: 1, SDPFmtpLine: "", RTCPFeedback: nil},
-			PayloadType:        0,
-		},
-		{
-			RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypePCMA, ClockRate: 8000, Channels: 1, SDPFmtpLine: "", RTCPFeedback: nil},
-			PayloadType:        8,
-		},
-		{
-			RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: mimeTypeOpus, ClockRate: 48000, Channels: 2, SDPFmtpLine: "minptime=10;useinbandfec=1", RTCPFeedback: nil},
-			PayloadType:        111,
-		},
-	} {
-		if err := m.RegisterCodec(codec, webrtc.RTPCodecTypeAudio); err != nil {
-			return err
+	for _, trackInfo := range c.trackInfos {
+		if trackInfo.TrackType == TrackTypeAudio {
+			for _, codec := range trackInfo.Codecs {
+				mimeType := fmt.Sprintf("audio/%s", codec.Name)
+				sdpFmtpLine := strings.Join(codec.Params, ";")
+				var rtcpFb []webrtc.RTCPFeedback = nil
+				for _, fb := range codec.Feedback {
+					vals := strings.Split(fb, " ")
+					if len(vals) < 2 {
+						rtcpFb = append(rtcpFb, webrtc.RTCPFeedback{Type: vals[0], Parameter: ""})
+					} else {
+						rtcpFb = append(rtcpFb, webrtc.RTCPFeedback{Type: vals[0], Parameter: vals[1]})
+					}
+				}
+				if err := m.RegisterCodec(webrtc.RTPCodecParameters{
+					RTPCodecCapability: webrtc.RTPCodecCapability{
+						MimeType:     mimeType,
+						ClockRate:    uint32(codec.ClockRate),
+						Channels:     uint16(codec.Channels),
+						SDPFmtpLine:  sdpFmtpLine,
+						RTCPFeedback: rtcpFb},
+					PayloadType: webrtc.PayloadType(codec.Payload),
+				}, webrtc.RTPCodecTypeAudio); err != nil {
+					return err
+				}
+			}
+		} else if trackInfo.TrackType == TrackTypeVideo {
+			for _, codec := range trackInfo.Codecs {
+				mimeType := fmt.Sprintf("video/%s", codec.Name)
+				sdpFmtpLine := strings.Join(codec.Params, ";")
+				var rtcpFb []webrtc.RTCPFeedback = nil
+				for _, fb := range codec.Feedback {
+					vals := strings.Split(fb, " ")
+					if len(vals) < 2 {
+						rtcpFb = append(rtcpFb, webrtc.RTCPFeedback{Type: vals[0], Parameter: ""})
+					} else {
+						rtcpFb = append(rtcpFb, webrtc.RTCPFeedback{Type: vals[0], Parameter: vals[1]})
+					}
+				}
+				if err := m.RegisterCodec(webrtc.RTPCodecParameters{
+					RTPCodecCapability: webrtc.RTPCodecCapability{
+						MimeType:     mimeType,
+						ClockRate:    uint32(codec.ClockRate),
+						SDPFmtpLine:  sdpFmtpLine,
+						RTCPFeedback: rtcpFb},
+					PayloadType: webrtc.PayloadType(codec.Payload),
+				}, webrtc.RTPCodecTypeVideo); err != nil {
+					return err
+				}
+			}
 		}
 	}
-
-	videoRTCPFeedback := []webrtc.RTCPFeedback{{"goog-remb", ""}, {"transport-cc", ""}, {"ccm", "fir"}, {"nack", ""}, {"nack", "pli"}}
-
-	for _, codec := range []webrtc.RTPCodecParameters{
-		{
-			RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: mimeTypeVP8, ClockRate: 90000, RTCPFeedback: videoRTCPFeedback},
-			PayloadType:        100,
-		},
-		{
-			RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: mimeTypeH264, ClockRate: 90000, SDPFmtpLine: "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=640c33", RTCPFeedback: videoRTCPFeedback},
-			PayloadType:        96,
-		},
-	} {
-		if err := m.RegisterCodec(codec, webrtc.RTPCodecTypeVideo); err != nil {
-			return err
+	/*
+		for _, codec := range []webrtc.RTPCodecParameters{
+			{
+				RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypePCMU, ClockRate: 8000, Channels: 1, SDPFmtpLine: "", RTCPFeedback: nil},
+				PayloadType:        0,
+			},
+			{
+				RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypePCMA, ClockRate: 8000, Channels: 1, SDPFmtpLine: "", RTCPFeedback: nil},
+				PayloadType:        8,
+			},
+			{
+				RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: mimeTypeOpus, ClockRate: 48000, Channels: 2, SDPFmtpLine: "minptime=10;useinbandfec=1", RTCPFeedback: nil},
+				PayloadType:        111,
+			},
+		} {
+			if err := m.RegisterCodec(codec, webrtc.RTPCodecTypeAudio); err != nil {
+				return err
+			}
 		}
-	}
 
+		videoRTCPFeedback := []webrtc.RTCPFeedback{{"goog-remb", ""}, {"transport-cc", ""}, {"ccm", "fir"}, {"nack", ""}, {"nack", "pli"}}
+
+		for _, codec := range []webrtc.RTPCodecParameters{
+			{
+				RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: mimeTypeVP8, ClockRate: 90000, RTCPFeedback: videoRTCPFeedback},
+				PayloadType:        100,
+			},
+			{
+				RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: mimeTypeH264, ClockRate: 90000, SDPFmtpLine: "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=640c33", RTCPFeedback: videoRTCPFeedback},
+				PayloadType:        96,
+			},
+		} {
+			if err := m.RegisterCodec(codec, webrtc.RTPCodecTypeVideo); err != nil {
+				return err
+			}
+		}
+	*/
 	// Create a InterceptorRegistry. This is the user configurable RTP/RTCP Pipeline.
 	// This provides NACKs, RTCP Reports and other features. If you use `webrtc.NewPeerConnection`
 	// this is enabled by default. If you are manually managing You MUST create a InterceptorRegistry
@@ -315,43 +369,50 @@ func (c *WebRTCTransport) Close() error {
 
 func (c *WebRTCTransport) AddLocalTracks() error {
 
-	audioTrack, err := webrtc.NewTrackLocalStaticRTP(
-		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypePCMU},
-		fmt.Sprintf("audio-%d", rand.Uint32()),
-		fmt.Sprintf("rtc-%d", rand.Uint32()),
-	)
+	for _, trackInfo := range c.trackInfos {
 
-	if err != nil {
-		logger.Errorf("NewTrack: panic => %v", err)
-		return err
+		if trackInfo.TrackType == TrackTypeAudio {
+
+			audioTrack, err := webrtc.NewTrackLocalStaticRTP(
+				webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypePCMU},
+				fmt.Sprintf("audio-%d", rand.Uint32()),
+				fmt.Sprintf("rtc-%d", rand.Uint32()),
+			)
+
+			if err != nil {
+				logger.Errorf("NewTrack: panic => %v", err)
+				return err
+			}
+
+			if _, err = c.pc.AddTrack(audioTrack); err != nil {
+				logger.Errorf("AddTrack: panic => %v", err)
+				return err
+			}
+
+			c.localTracks[TrackTypeAudio] = audioTrack
+		} else if trackInfo.TrackType == TrackTypeVideo {
+
+			videoTrack, err := webrtc.NewTrackLocalStaticRTP(
+				webrtc.RTPCodecCapability{MimeType: mimeTypeH264},
+				fmt.Sprintf("video-%d", rand.Uint32()),
+				fmt.Sprintf("rtc-%d", rand.Uint32()),
+			)
+
+			if err != nil {
+				logger.Errorf("NewTrack: panic => %v", err)
+				return err
+			}
+
+			if rtpSender, err := c.pc.AddTrack(videoTrack); err == nil {
+				c.HandleRtcpFb(rtpSender)
+			} else {
+				logger.Errorf("AddTrack: panic => %v", err)
+				return err
+			}
+
+			c.localTracks[TrackTypeVideo] = videoTrack
+		}
 	}
-
-	if _, err = c.pc.AddTrack(audioTrack); err != nil {
-		logger.Errorf("AddTrack: panic => %v", err)
-		return err
-	}
-
-	c.localTracks[TrackTypeAudio] = audioTrack
-
-	videoTrack, err := webrtc.NewTrackLocalStaticRTP(
-		webrtc.RTPCodecCapability{MimeType: mimeTypeH264},
-		fmt.Sprintf("video-%d", rand.Uint32()),
-		fmt.Sprintf("rtc-%d", rand.Uint32()),
-	)
-
-	if err != nil {
-		logger.Errorf("NewTrack: panic => %v", err)
-		return err
-	}
-
-	if rtpSender, err := c.pc.AddTrack(videoTrack); err == nil {
-		c.HandleRtcpFb(rtpSender)
-	} else {
-		logger.Errorf("AddTrack: panic => %v", err)
-		return err
-	}
-
-	c.localTracks[TrackTypeVideo] = videoTrack
 
 	return nil
 }
@@ -385,7 +446,7 @@ func (c *WebRTCTransport) OnAnswer(answer *Desc) error {
 		SDP:  answer.SDP,
 	}
 	if err := c.pc.SetRemoteDescription(c.answer); err != nil {
-		logger.Errorf("SetRemoteDescription: panic => %v", err)
+		logger.Errorf("OnAnswer::WebRTCTransport::SetRemoteDescription: panic => %v", err)
 		return err
 	}
 	return nil
@@ -405,7 +466,7 @@ func (c *WebRTCTransport) OnOffer(offer *Desc) error {
 	}
 
 	if err := c.pc.SetRemoteDescription(desc); err != nil {
-		logger.Errorf("SetRemoteDescription: panic => %v", err)
+		logger.Errorf("WebRTCTransport::OnOffer::SetRemoteDescription: panic => %v", err)
 		return err
 	}
 	return nil
