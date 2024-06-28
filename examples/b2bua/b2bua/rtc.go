@@ -54,14 +54,15 @@ var (
 )
 
 type WebRTCTransport struct {
-	pc          *webrtc.PeerConnection
-	answer      webrtc.SessionDescription
-	offer       webrtc.SessionDescription
-	localTracks map[TrackType]*webrtc.TrackLocalStaticRTP
-	closed      utils.AtomicBool
-	ctx         context.Context
-	cancel      context.CancelFunc
-	trackInfos  []*TrackInfo
+	pc           *webrtc.PeerConnection
+	answer       webrtc.SessionDescription
+	offer        webrtc.SessionDescription
+	localTracks  map[TrackType]*webrtc.TrackLocalStaticRTP
+	remoteTracks map[TrackType]*webrtc.TrackRemote
+	closed       utils.AtomicBool
+	ctx          context.Context
+	cancel       context.CancelFunc
+	trackInfos   []*TrackInfo
 
 	videoPool *sync.Pool
 	audioPool *sync.Pool
@@ -77,9 +78,10 @@ type WebRTCTransport struct {
 
 func NewWebRTCTransport(trackInfos []*TrackInfo) *WebRTCTransport {
 	c := &WebRTCTransport{
-		trackInfos:  trackInfos,
-		localTracks: make(map[TrackType]*webrtc.TrackLocalStaticRTP),
-		sequencer:   newSequencer(MaxPacketTrack),
+		trackInfos:   trackInfos,
+		localTracks:  make(map[TrackType]*webrtc.TrackLocalStaticRTP),
+		remoteTracks: make(map[TrackType]*webrtc.TrackRemote),
+		sequencer:    newSequencer(MaxPacketTrack),
 		videoPool: &sync.Pool{
 			New: func() interface{} {
 				b := make([]byte, MaxPacketTrack*maxPktSize)
@@ -245,6 +247,9 @@ func (c *WebRTCTransport) Init(callConfig CallConfig) error {
 				c.buff.OnFeedback(func(fb []rtcp.Packet) {})
 			}
 			c.bmu.Unlock()
+			c.remoteTracks[TrackTypeVideo] = track
+		} else if track.Kind() == webrtc.RTPCodecTypeAudio {
+			c.remoteTracks[TrackTypeAudio] = track
 		}
 		buf := make([]byte, 1500)
 		for {
@@ -538,13 +543,13 @@ func (c *WebRTCTransport) HandleRtcpFb(rtpSender *webrtc.RTPSender) {
 					if expectedMinBitrate == 0 || expectedMinBitrate > uint64(p.Bitrate) {
 						expectedMinBitrate = uint64(p.Bitrate)
 						//hi.CameraUpdateBitrate(uint32(expectedMinBitrate / 1024))
-						logger.Debugf("ReceiverEstimatedMaximumBitrate %d", expectedMinBitrate/1024)
+						logger.Debugf("[%v] ReceiverEstimatedMaximumBitrate %d", rtpSender.Track().Kind(), expectedMinBitrate/1024)
 					}
 				case *rtcp.ReceiverReport:
 					for _, r := range p.Reports {
 						if maxRatePacketLoss == 0 || maxRatePacketLoss < r.FractionLost {
 							maxRatePacketLoss = r.FractionLost
-							logger.Debugf("maxRatePacketLoss %d", maxRatePacketLoss)
+							logger.Infof("maxRatePacketLoss %d", maxRatePacketLoss)
 						}
 					}
 				case *rtcp.TransportLayerNack:
@@ -570,6 +575,11 @@ func (c *WebRTCTransport) HandleRtcpFb(rtpSender *webrtc.RTPSender) {
 }
 
 func (c *WebRTCTransport) RequestKeyFrame() error {
+	track := c.remoteTracks[TrackTypeVideo]
+	if track == nil {
+		return fmt.Errorf("video track is nil")
+	}
+	c.pc.WriteRTCP([]rtcp.Packet{&rtcp.PictureLossIndication{MediaSSRC: uint32(track.SSRC())}})
 	return nil
 }
 
