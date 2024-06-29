@@ -19,6 +19,7 @@ type UdpTansport struct {
 	ports             map[TrackType]*UdpPort
 	localDescription  *sdp.Session
 	remoteDescription *sdp.Session
+	sequencer         *sequencer
 
 	mu                     sync.RWMutex
 	rtpHandler             func(trackType TrackType, payload []byte)
@@ -186,6 +187,69 @@ func (c *UdpTansport) onRtpPacket(trackType TrackType, packet []byte, raddr net.
 
 func (c *UdpTansport) onRtcpPacket(trackType TrackType, packet []byte, raddr net.Addr) error {
 	logger.Debugf("UdpTansport::OnRtcpPacketReceived: %v read %d bytes, raddr %v", trackType, len(packet), raddr)
+
+	pkts, err := rtcp.Unmarshal(packet)
+	if err != nil {
+		logger.Errorf("Unmarshal rtcp receiver packets err %v", err)
+	}
+	var fwdPkts []rtcp.Packet
+	pliOnce := true
+	firOnce := true
+	var (
+		maxRatePacketLoss  uint8
+		expectedMinBitrate uint64
+	)
+	for _, pkt := range pkts {
+		switch p := pkt.(type) {
+		case *rtcp.PictureLossIndication:
+			if pliOnce {
+				fwdPkts = append(fwdPkts, p)
+				logger.Infof("Picture Loss Indication")
+				if c.requestKeyFrameHandler != nil {
+					c.requestKeyFrameHandler()
+				}
+				pliOnce = false
+			}
+		case *rtcp.FullIntraRequest:
+			if firOnce {
+				fwdPkts = append(fwdPkts, p)
+				logger.Infof("FullIntraRequest")
+				if c.requestKeyFrameHandler != nil {
+					c.requestKeyFrameHandler()
+				}
+				firOnce = false
+			}
+		case *rtcp.ReceiverEstimatedMaximumBitrate:
+			if expectedMinBitrate == 0 || expectedMinBitrate > uint64(p.Bitrate) {
+				expectedMinBitrate = uint64(p.Bitrate)
+				//hi.CameraUpdateBitrate(uint32(expectedMinBitrate / 1024))
+				logger.Debugf(" ReceiverEstimatedMaximumBitrate %d", expectedMinBitrate/1024)
+			}
+		case *rtcp.ReceiverReport:
+			for _, r := range p.Reports {
+				if maxRatePacketLoss == 0 || maxRatePacketLoss < r.FractionLost {
+					maxRatePacketLoss = r.FractionLost
+					logger.Infof("maxRatePacketLoss %d", maxRatePacketLoss)
+				}
+			}
+		case *rtcp.TransportLayerNack:
+			logger.Infof("Nack %v", p)
+			if c.sequencer != nil {
+				var nackedPackets []packetMeta
+				for _, pair := range p.Nacks {
+					nackedPackets = append(nackedPackets, c.sequencer.getSeqNoPairs(pair.PacketList())...)
+				}
+				if len(nackedPackets) > 0 {
+					//if err = c.RetransmitPackets(nackedPackets); err == nil {
+					//	logger.Infof("Nack pair %v", nackedPackets)
+					//}
+				} else {
+					//buf, _ := p.Marshal()
+					//c.onRtcpPacket(TrackTypeVideo, packet)
+				}
+			}
+		}
+	}
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	if c.rtcpHandler != nil {
@@ -305,7 +369,7 @@ func (c *UdpTansport) RequestKeyFrame() error {
 	if c.videoSSRC == 0 {
 		return fmt.Errorf("video ssrc is 0")
 	}
-	pli := rtcp.PictureLossIndication{SenderSSRC: uint32(0), MediaSSRC: uint32(c.videoSSRC)}
+	pli := rtcp.PictureLossIndication{MediaSSRC: uint32(c.videoSSRC)}
 	buf, err := pli.Marshal()
 	if err != nil {
 		logger.Error(err)

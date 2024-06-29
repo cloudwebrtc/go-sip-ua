@@ -17,19 +17,3 @@ type TrackInfo struct {
 	Port       int
 	RtcpPort   int
 }
-
-type Track interface {
-	Type() TrackType
-
-	Codec() string
-
-	PayloadType() int
-
-	WriteRtpPacket(packet []byte) (int, error)
-	WriteRtcpPacket(packet []byte) (int, error)
-
-	ReadRtpPacket(func(packet []byte) error) error
-	ReadRtcpPacket(func(packet []byte) error) error
-
-	RequestKeyFrame() error
-}
