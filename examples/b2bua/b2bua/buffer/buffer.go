@@ -376,7 +376,7 @@ func (b *Buffer) calc(pkt []byte, arrivalTime int64) {
 	b.lastTransit = transit
 
 	if b.twcc {
-		if ext := p.GetExtension(b.twccExt); ext != nil && len(ext) > 1 {
+		if ext := p.GetExtension(b.twccExt); len(ext) > 1 {
 			b.feedbackTWCC(binary.BigEndian.Uint16(ext[0:2]), arrivalTime, p.Marker)
 		}
 	}
@@ -408,7 +408,7 @@ func (b *Buffer) calc(pkt []byte, arrivalTime int64) {
 }
 
 func (b *Buffer) buildNACKPacket() []rtcp.Packet {
-	if nacks, askKeyframe := b.nacker.pairs(b.cycles | uint32(b.maxSeqNo)); (nacks != nil && len(nacks) > 0) || askKeyframe {
+	if nacks, askKeyframe := b.nacker.pairs(b.cycles | uint32(b.maxSeqNo)); len(nacks) > 0 || askKeyframe {
 		var pkts []rtcp.Packet
 		if len(nacks) > 0 {
 			pkts = []rtcp.Packet{&rtcp.TransportLayerNack{
@@ -583,10 +583,7 @@ func IsTimestampWrapAround(timestamp1 uint32, timestamp2 uint32) bool {
 // IsLaterTimestamp returns true if timestamp1 is later in time than timestamp2 factoring in timestamp wrap-around
 func IsLaterTimestamp(timestamp1 uint32, timestamp2 uint32) bool {
 	if timestamp1 > timestamp2 {
-		if IsTimestampWrapAround(timestamp2, timestamp1) {
-			return false
-		}
-		return true
+		return !IsTimestampWrapAround(timestamp2, timestamp1)
 	}
 	if IsTimestampWrapAround(timestamp1, timestamp2) {
 		return true

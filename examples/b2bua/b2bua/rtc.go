@@ -325,7 +325,6 @@ func (c *WebRTCTransport) WriteRTP(trackType TrackType, packet []byte) (int, err
 		}
 	} else if trackType == TrackTypeVideo {
 		if c.localTracks[TrackTypeVideo] != nil {
-
 			var pkt rtp.Packet
 			if err := pkt.Unmarshal(packet); err == nil {
 				c.bmu.Lock()

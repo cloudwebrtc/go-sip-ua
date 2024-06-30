@@ -7,10 +7,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cloudwebrtc/go-sip-ua/examples/b2bua/b2bua/buffer"
 	"github.com/cloudwebrtc/go-sip-ua/pkg/utils"
 	"github.com/ghettovoice/gosip/util"
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
+	"github.com/pion/webrtc/v3"
 	"github.com/pixelbender/go-sdp/sdp"
 )
 
@@ -19,7 +21,6 @@ type UdpTansport struct {
 	ports             map[TrackType]*UdpPort
 	localDescription  *sdp.Session
 	remoteDescription *sdp.Session
-	sequencer         *sequencer
 
 	mu                     sync.RWMutex
 	rtpHandler             func(trackType TrackType, payload []byte)
@@ -30,6 +31,12 @@ type UdpTansport struct {
 	closed    utils.AtomicBool
 	ctx       context.Context
 	cancel    context.CancelFunc
+
+	sequencer *sequencer
+	videoPool *sync.Pool
+	audioPool *sync.Pool
+	buff      *buffer.Buffer
+	bmu       sync.Mutex
 }
 
 func NewUdpTansport(trackInfos []*TrackInfo) *UdpTansport {
@@ -37,6 +44,19 @@ func NewUdpTansport(trackInfos []*TrackInfo) *UdpTansport {
 		trackInfos: trackInfos,
 		ports:      make(map[TrackType]*UdpPort),
 		videoSSRC:  0,
+		sequencer:  newSequencer(MaxPacketTrack),
+		videoPool: &sync.Pool{
+			New: func() interface{} {
+				b := make([]byte, MaxPacketTrack*maxPktSize)
+				return &b
+			},
+		},
+		audioPool: &sync.Pool{
+			New: func() interface{} {
+				b := make([]byte, maxPktSize*25)
+				return &b
+			},
+		},
 	}
 
 	t.ctx, t.cancel = context.WithCancel(context.TODO())
@@ -167,6 +187,17 @@ func (c *UdpTansport) onRtpPacket(trackType TrackType, packet []byte, raddr net.
 
 	if trackType == TrackTypeVideo && c.videoSSRC == 0 {
 		c.videoSSRC = p.SSRC
+
+		c.bmu.Lock()
+		if c.buff == nil {
+			c.buff = buffer.NewBuffer(uint32(p.SSRC), c.videoPool, c.audioPool, buffer.Logger)
+			c.buff.Bind(webrtc.RTPParameters{}, buffer.Options{
+				MaxBitRate: 1500,
+			})
+
+			c.buff.OnFeedback(func(fb []rtcp.Packet) {})
+		}
+		c.bmu.Unlock()
 		//c.sendPLI(c.videoSSRC)
 	}
 
