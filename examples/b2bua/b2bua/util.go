@@ -353,9 +353,6 @@ func HasWebRTCAttributes(attributes []*sdp.Attr) bool {
 }
 
 func ParseTransportType(sdp *sdp.Session) TransportType {
-	if sdp == nil {
-		return TransportTypeUnknown
-	}
 	for _, m := range sdp.Media {
 		// Proto: "UDP/TLS/RTP/SAVPF"
 		if strings.Contains(m.Proto, "SAVPF") && HasWebRTCAttributes(m.Attributes) {

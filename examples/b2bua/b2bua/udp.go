@@ -92,28 +92,22 @@ func (c *UdpTansport) Init(config CallConfig) error {
 	var medias []*sdp.Media
 
 	for _, trackInfo := range c.trackInfos {
-		udpPort, err := NewUdpPort(trackInfo.TrackType, config.ExternalRtpAddress)
+
+		var rAddr *net.UDPAddr = nil
+		var rRtcpAddr *net.UDPAddr = nil
+		if trackInfo.Connection != nil {
+			rAddr, _ = net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", trackInfo.Connection.Address, trackInfo.Port))
+			rRtcpAddr, _ = net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", trackInfo.Connection.Address, trackInfo.RtcpPort))
+		}
+
+		udpPort, err := NewUdpPort(trackInfo.TrackType, rAddr, rRtcpAddr, config.ExternalRtpAddress)
 		if err != nil {
 			return err
 		}
 		udpPort.Init()
-		udpPort.OnRtpPacketReceived(c.onRtpPacket)
-		udpPort.OnRtcpPacketReceived(c.onRtcpPacket)
+		udpPort.OnRtpPacket(c.onRtpPacket)
+		udpPort.OnRtcpPacket(c.onRtcpPacket)
 		c.ports[trackInfo.TrackType] = udpPort
-
-		if trackInfo.Connection != nil {
-			rtpAddr := fmt.Sprintf("%s:%d", trackInfo.Connection.Address, trackInfo.Port)
-			raddr, err := net.ResolveUDPAddr("udp", rtpAddr)
-			if err == nil {
-				udpPort.SetRemoteAddress(raddr)
-			}
-
-			rtcpAddr := fmt.Sprintf("%s:%d", trackInfo.Connection.Address, trackInfo.RtcpPort)
-			rtcpRaddr, err := net.ResolveUDPAddr("udp", rtcpAddr)
-			if err == nil {
-				udpPort.SetRemoteRtcpAddress(rtcpRaddr)
-			}
-		}
 
 		media := &sdp.Media{}
 		media.Type = string(trackInfo.TrackType)
@@ -304,14 +298,13 @@ func (c *UdpTansport) WriteRTP(trackType TrackType, packet []byte) (int, error) 
 	}
 
 	port := c.ports[trackType]
-	raddr := port.GetRemoteRtpAddress()
-	if raddr == nil {
-		logger.Errorf("UdpTansport::WriteRTP: raddr is nil")
+
+	if port == nil {
+		logger.Errorf("UdpTansport::WriteRTP: port is nil")
 		return 0, nil
 	}
 
-	logger.Debugf("UdpTansport::WriteRTP: %v, raddr %v", trackType, *raddr)
-	return port.WriteRtpPacket(pktbuf, raddr)
+	return port.WriteRtp(pktbuf)
 }
 
 func (c *UdpTansport) WriteRTCP(trackType TrackType, packet []byte) (int, error) {
@@ -324,13 +317,13 @@ func (c *UdpTansport) WriteRTCP(trackType TrackType, packet []byte) (int, error)
 	logger.Debugf("UdpTansport::WriteRTCP: %v read %d packets", trackType, len(pkts))
 
 	port := c.ports[trackType]
-	raddr := port.GetRemoteRtcpAddress()
-	if raddr == nil {
-		logger.Errorf("UdpTansport::WriteRTP: raddr is nil")
-		raddr = port.GetRemoteRtpAddress()
+
+	if port == nil {
+		logger.Errorf("UdpTansport::WriteRTCP: port is nil")
+		return 0, nil
 	}
-	logger.Debugf("UdpTansport::WriteRTCP: %v read %d packets, raddr %v", trackType, len(pkts), *raddr)
-	return port.WriteRtcpPacket(packet, raddr)
+
+	return port.WriteRtcp(packet)
 }
 
 func (c *UdpTansport) Type() TransportType {
