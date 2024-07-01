@@ -7,12 +7,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cloudwebrtc/go-sip-ua/examples/b2bua/b2bua/buffer"
 	"github.com/cloudwebrtc/go-sip-ua/pkg/utils"
 	"github.com/ghettovoice/gosip/util"
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
-	"github.com/pion/webrtc/v3"
 	"github.com/pixelbender/go-sdp/sdp"
 )
 
@@ -31,12 +29,6 @@ type UdpTansport struct {
 	closed    utils.AtomicBool
 	ctx       context.Context
 	cancel    context.CancelFunc
-
-	sequencer *sequencer
-	videoPool *sync.Pool
-	audioPool *sync.Pool
-	buff      *buffer.Buffer
-	bmu       sync.Mutex
 }
 
 func NewUdpTansport(trackInfos []*TrackInfo) *UdpTansport {
@@ -44,19 +36,6 @@ func NewUdpTansport(trackInfos []*TrackInfo) *UdpTansport {
 		trackInfos: trackInfos,
 		ports:      make(map[TrackType]*UdpPort),
 		videoSSRC:  0,
-		sequencer:  newSequencer(MaxPacketTrack),
-		videoPool: &sync.Pool{
-			New: func() interface{} {
-				b := make([]byte, MaxPacketTrack*maxPktSize)
-				return &b
-			},
-		},
-		audioPool: &sync.Pool{
-			New: func() interface{} {
-				b := make([]byte, maxPktSize*25)
-				return &b
-			},
-		},
 	}
 
 	t.ctx, t.cancel = context.WithCancel(context.TODO())
@@ -82,7 +61,7 @@ func (c *UdpTansport) Init(config CallConfig) error {
 			SessionVersion: time.Now().UnixNano() / 1e6,
 		},
 		Timing: &sdp.Timing{Start: time.Time{}, Stop: time.Time{}},
-		//Name: "Example",
+		//Name: "play", // Session Name ("s=")
 		Connection: &sdp.Connection{
 			Address: host,
 		},
@@ -181,16 +160,6 @@ func (c *UdpTansport) onRtpPacket(trackType TrackType, packet []byte, raddr net.
 
 	if trackType == TrackTypeVideo && c.videoSSRC == 0 {
 		c.videoSSRC = p.SSRC
-
-		c.bmu.Lock()
-		if c.buff == nil {
-			c.buff = buffer.NewBuffer(uint32(p.SSRC), c.videoPool, c.audioPool, buffer.Logger)
-			c.buff.Bind(webrtc.RTPParameters{}, buffer.Options{
-				MaxBitRate: 1500,
-			})
-			c.buff.OnFeedback(func(fb []rtcp.Packet) {})
-		}
-		c.bmu.Unlock()
 		//c.sendPLI(c.videoSSRC)
 	}
 
@@ -211,69 +180,6 @@ func (c *UdpTansport) onRtpPacket(trackType TrackType, packet []byte, raddr net.
 
 func (c *UdpTansport) onRtcpPacket(trackType TrackType, packet []byte, raddr net.Addr) error {
 	logger.Debugf("UdpTansport::OnRtcpPacketReceived: %v read %d bytes, raddr %v", trackType, len(packet), raddr)
-
-	pkts, err := rtcp.Unmarshal(packet)
-	if err != nil {
-		logger.Errorf("Unmarshal rtcp receiver packets err %v", err)
-	}
-	var fwdPkts []rtcp.Packet
-	pliOnce := true
-	firOnce := true
-	var (
-		maxRatePacketLoss  uint8
-		expectedMinBitrate uint64
-	)
-	for _, pkt := range pkts {
-		switch p := pkt.(type) {
-		case *rtcp.PictureLossIndication:
-			if pliOnce {
-				fwdPkts = append(fwdPkts, p)
-				logger.Infof("Picture Loss Indication")
-				if c.requestKeyFrameHandler != nil {
-					c.requestKeyFrameHandler()
-				}
-				pliOnce = false
-			}
-		case *rtcp.FullIntraRequest:
-			if firOnce {
-				fwdPkts = append(fwdPkts, p)
-				logger.Infof("FullIntraRequest")
-				if c.requestKeyFrameHandler != nil {
-					c.requestKeyFrameHandler()
-				}
-				firOnce = false
-			}
-		case *rtcp.ReceiverEstimatedMaximumBitrate:
-			if expectedMinBitrate == 0 || expectedMinBitrate > uint64(p.Bitrate) {
-				expectedMinBitrate = uint64(p.Bitrate)
-				//hi.CameraUpdateBitrate(uint32(expectedMinBitrate / 1024))
-				logger.Debugf(" ReceiverEstimatedMaximumBitrate %d", expectedMinBitrate/1024)
-			}
-		case *rtcp.ReceiverReport:
-			for _, r := range p.Reports {
-				if maxRatePacketLoss == 0 || maxRatePacketLoss < r.FractionLost {
-					maxRatePacketLoss = r.FractionLost
-					logger.Infof("maxRatePacketLoss %d", maxRatePacketLoss)
-				}
-			}
-		case *rtcp.TransportLayerNack:
-			logger.Infof("Nack %v", p)
-			if c.sequencer != nil {
-				var nackedPackets []packetMeta
-				for _, pair := range p.Nacks {
-					nackedPackets = append(nackedPackets, c.sequencer.getSeqNoPairs(pair.PacketList())...)
-				}
-				if len(nackedPackets) > 0 {
-					//if err = c.RetransmitPackets(nackedPackets); err == nil {
-					//	logger.Infof("Nack pair %v", nackedPackets)
-					//}
-				} else {
-					//buf, _ := p.Marshal()
-					//c.onRtcpPacket(TrackTypeVideo, packet)
-				}
-			}
-		}
-	}
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	if c.rtcpHandler != nil {
@@ -283,18 +189,19 @@ func (c *UdpTansport) onRtcpPacket(trackType TrackType, packet []byte, raddr net
 }
 
 func (c *UdpTansport) WriteRTP(trackType TrackType, packet []byte) (int, error) {
+	/*
+		p := &rtp.Packet{}
+		if err := p.Unmarshal(packet); err != nil {
+			logger.Errorf("tp.Packet Unmarshal: e %v", err)
+		}
+		logger.Debugf("UdpTansport::WriteRTP: %v, write %d bytes, seq %d, ts %d", trackType, len(packet), p.SequenceNumber, p.Timestamp)
 
-	p := &rtp.Packet{}
-	if err := p.Unmarshal(packet); err != nil {
-		logger.Errorf("tp.Packet Unmarshal: e %v", err)
-	}
-	logger.Debugf("UdpTansport::WriteRTP: %v, write %d bytes, seq %d, ts %d", trackType, len(packet), p.SequenceNumber, p.Timestamp)
+		pktbuf, err := p.Marshal()
 
-	pktbuf, err := p.Marshal()
-
-	if err != nil {
-		logger.Errorf("UdpTansport::WriteRTP: Marshal rtp receiver packets err %v", err)
-	}
+		if err != nil {
+			logger.Errorf("UdpTansport::WriteRTP: Marshal rtp receiver packets err %v", err)
+		}
+	*/
 
 	port := c.ports[trackType]
 
@@ -303,25 +210,24 @@ func (c *UdpTansport) WriteRTP(trackType TrackType, packet []byte) (int, error) 
 		return 0, nil
 	}
 
-	return port.WriteRtp(pktbuf)
+	return port.WriteRtp(packet)
 }
 
 func (c *UdpTansport) WriteRTCP(trackType TrackType, packet []byte) (int, error) {
+	/*
+		pkts, err := rtcp.Unmarshal(packet)
+		if err != nil {
+			logger.Errorf("UdpTansport::WriteRTP: Unmarshal rtcp receiver packets err %v", err)
+		}
 
-	pkts, err := rtcp.Unmarshal(packet)
-	if err != nil {
-		logger.Errorf("UdpTansport::WriteRTP: Unmarshal rtcp receiver packets err %v", err)
-	}
-
-	logger.Debugf("UdpTansport::WriteRTCP: %v read %d packets", trackType, len(pkts))
-
+		logger.Debugf("UdpTansport::WriteRTCP: %v read %d packets", trackType, len(pkts))
+	*/
 	port := c.ports[trackType]
 
 	if port == nil {
 		logger.Errorf("UdpTansport::WriteRTCP: port is nil")
 		return 0, nil
 	}
-
 	return port.WriteRtcp(packet)
 }
 
@@ -392,7 +298,11 @@ func (c *UdpTansport) RequestKeyFrame() error {
 	if c.videoSSRC == 0 {
 		return fmt.Errorf("video ssrc is 0")
 	}
-	pli := rtcp.PictureLossIndication{MediaSSRC: uint32(c.videoSSRC)}
+	return c.sendPLI(c.videoSSRC)
+}
+
+func (c *UdpTansport) sendPLI(ssrc uint32) error {
+	pli := rtcp.PictureLossIndication{MediaSSRC: uint32(ssrc)}
 	buf, err := pli.Marshal()
 	if err != nil {
 		logger.Error(err)
@@ -401,13 +311,13 @@ func (c *UdpTansport) RequestKeyFrame() error {
 	_, errSend := c.WriteRTCP(TrackTypeVideo, buf)
 	if errSend != nil {
 		logger.Error(errSend)
-		return errSend
+		return err
 	}
-	logger.Infof("RequestKeyFrame: Sent PLI %v", pli)
+	logger.Infof("Sent PLI %v", pli)
 	return nil
 }
 
-func (c *UdpTansport) sendPLI(ssrc uint32) error {
+func (c *UdpTansport) sendTntervalPlic(ssrc uint32) error {
 	go func() {
 		ticker := time.NewTicker(time.Second * 1)
 		for range ticker.C {
@@ -430,4 +340,54 @@ func (c *UdpTansport) sendPLI(ssrc uint32) error {
 		}
 	}()
 	return nil
+}
+
+func (c *UdpTansport) handleRtcpFeedback(packet []byte) {
+	pkts, err := rtcp.Unmarshal(packet)
+	if err != nil {
+		logger.Errorf("Unmarshal rtcp receiver packets err %v", err)
+	}
+	var fwdPkts []rtcp.Packet
+	pliOnce := true
+	firOnce := true
+	var (
+		maxRatePacketLoss  uint8
+		expectedMinBitrate uint64
+	)
+	for _, pkt := range pkts {
+		switch p := pkt.(type) {
+		case *rtcp.PictureLossIndication:
+			if pliOnce {
+				fwdPkts = append(fwdPkts, p)
+				logger.Infof("Picture Loss Indication")
+				if c.requestKeyFrameHandler != nil {
+					c.requestKeyFrameHandler()
+				}
+				pliOnce = false
+			}
+		case *rtcp.FullIntraRequest:
+			if firOnce {
+				fwdPkts = append(fwdPkts, p)
+				logger.Infof("FullIntraRequest")
+				if c.requestKeyFrameHandler != nil {
+					c.requestKeyFrameHandler()
+				}
+				firOnce = false
+			}
+		case *rtcp.ReceiverEstimatedMaximumBitrate:
+			if expectedMinBitrate == 0 || expectedMinBitrate > uint64(p.Bitrate) {
+				expectedMinBitrate = uint64(p.Bitrate)
+				logger.Debugf(" ReceiverEstimatedMaximumBitrate %d", expectedMinBitrate/1024)
+			}
+		case *rtcp.ReceiverReport:
+			for _, r := range p.Reports {
+				if maxRatePacketLoss == 0 || maxRatePacketLoss < r.FractionLost {
+					maxRatePacketLoss = r.FractionLost
+					logger.Infof("maxRatePacketLoss %d", maxRatePacketLoss)
+				}
+			}
+		case *rtcp.TransportLayerNack:
+			logger.Infof("Nack %v", p)
+		}
+	}
 }
