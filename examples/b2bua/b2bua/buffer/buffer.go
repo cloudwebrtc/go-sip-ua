@@ -126,6 +126,10 @@ func (b *Buffer) Bind(params webrtc.RTPParameters, o Options) {
 	b.Lock()
 	defer b.Unlock()
 
+	if len(params.Codecs) == 0 {
+		return
+	}
+
 	codec := params.Codecs[0]
 	b.clockRate = codec.ClockRate
 	b.maxBitrate = o.MaxBitRate

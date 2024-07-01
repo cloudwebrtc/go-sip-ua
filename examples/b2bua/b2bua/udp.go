@@ -188,7 +188,6 @@ func (c *UdpTansport) onRtpPacket(trackType TrackType, packet []byte, raddr net.
 			c.buff.Bind(webrtc.RTPParameters{}, buffer.Options{
 				MaxBitRate: 1500,
 			})
-
 			c.buff.OnFeedback(func(fb []rtcp.Packet) {})
 		}
 		c.bmu.Unlock()
