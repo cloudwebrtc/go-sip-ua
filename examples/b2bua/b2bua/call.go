@@ -182,38 +182,38 @@ func (b *B2BCall) BridgeMediaStream() error {
 	b.srcTrans.OnRtpPacket(func(trackType TrackType, payload []byte) {
 		_, err := b.destTrans.WriteRTP(trackType, payload)
 		if err != nil {
-			logger.Errorf("WriteRTP[%v] %v error: %v", b.destTrans.Type(), trackType, err)
+			logger.Warnf("WriteRTP[%v] %v error: %v", b.destTrans.Type(), trackType, err)
 		}
 	})
 	b.srcTrans.OnRtcpPacket(func(trackType TrackType, payload []byte) {
 		_, err := b.destTrans.WriteRTCP(trackType, payload)
 		if err != nil {
-			logger.Errorf("WriteRTCP[%v] %v error: %v", b.destTrans.Type(), trackType, err)
+			logger.Warnf("WriteRTCP[%v] %v error: %v", b.destTrans.Type(), trackType, err)
 		}
 	})
 	b.srcTrans.OnRequestKeyFrame(func() {
 		err := b.destTrans.RequestKeyFrame()
 		if err != nil {
-			logger.Errorf("OnRequestKeyFrame[%v]  error: %v", b.destTrans.Type(), err)
+			logger.Warnf("OnRequestKeyFrame[%v]  error: %v", b.destTrans.Type(), err)
 		}
 	})
 
 	b.destTrans.OnRtpPacket(func(trackType TrackType, payload []byte) {
 		_, err := b.srcTrans.WriteRTP(trackType, payload)
 		if err != nil {
-			logger.Errorf("WriteRTP[%v] %v error: %v", b.srcTrans.Type(), trackType, err)
+			logger.Warnf("WriteRTP[%v] %v error: %v", b.srcTrans.Type(), trackType, err)
 		}
 	})
 	b.destTrans.OnRtcpPacket(func(trackType TrackType, payload []byte) {
 		_, err := b.srcTrans.WriteRTCP(trackType, payload)
 		if err != nil {
-			logger.Errorf("WriteRTCP[%v] %v error: %v", b.srcTrans.Type(), trackType, err)
+			logger.Warnf("WriteRTCP[%v] %v error: %v", b.srcTrans.Type(), trackType, err)
 		}
 	})
 	b.destTrans.OnRequestKeyFrame(func() {
 		err := b.srcTrans.RequestKeyFrame()
 		if err != nil {
-			logger.Errorf("OnRequestKeyFrame[%v]  error: %v", b.srcTrans.Type(), err)
+			logger.Warnf("OnRequestKeyFrame[%v]  error: %v", b.srcTrans.Type(), err)
 		}
 	})
 	return nil
