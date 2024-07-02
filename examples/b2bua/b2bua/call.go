@@ -37,11 +37,11 @@ type Call struct {
 	// media transport
 	mediaTransport MediaTransport
 
-	srcTrackInfos []*TrackInfo
+	originalTrackInfos []*TrackInfo
 }
 
 func (b *Call) Init(transType MediaTransportType, trackInfos []*TrackInfo) {
-	b.srcTrackInfos = trackInfos
+	b.originalTrackInfos = trackInfos
 
 	if transType == TransportTypeWebRTC {
 		b.mediaTransport = NewWebRTCMediaTransport(trackInfos)
@@ -62,7 +62,7 @@ func (b *Call) ToString() string {
 
 func (b *Call) Accept(answer string) {
 	if aLegAnswer, err := b.mediaTransport.CreateAnswer(); err != nil {
-		logger.Errorf("Create A-Leg Answer failed: %v", err)
+		logger.Errorf("CreateAnswer failed: %v", err)
 		return
 	} else {
 		// for sdp fix
@@ -86,21 +86,6 @@ func (b *Call) Terminate() {
 }
 
 func (b *Call) OnOffer(sdp *Desc) error {
-	/*
-		sdpSess, _ := sdp.Parse()
-		transType := ParseTransportType(sdpSess)
-		logger.Infof("TransportType: %v", transType)
-		trackInfos, err := ParseTrackInfos(sdpSess)
-		if err != nil {
-			logger.Errorf("ParseTrackInfos error: %v", err)
-			return err
-		}
-
-		logger.Infof("TrackInfos: %v", trackInfos)
-		b.srcTrackInfos = trackInfos
-		print(sdpSess.String())
-	*/
-
 	err := b.mediaTransport.OnOffer(sdp)
 	if err != nil {
 		logger.Errorf("OnOffer error: %v", err)
@@ -110,24 +95,6 @@ func (b *Call) OnOffer(sdp *Desc) error {
 }
 
 func (b *Call) CreateOffer() (*Desc, error) {
-	/*
-		var trans MediaTransport
-
-		if tpType == TransportTypeWebRTC {
-			trans = NewWebRTCMediaTransport(b.srcTrackInfos)
-		} else {
-			trans = NewStandardMediaTransport("out-"+string(*b.src.CallID()), b.srcTrackInfos)
-		}
-
-		err := trans.Init(callConfig)
-
-		if err != nil {
-			logger.Errorf("Init transport error: %v", err)
-			return nil, err
-		}
-
-		b.destTrans = trans
-	*/
 	offer, err := b.mediaTransport.CreateOffer()
 	if err != nil {
 		logger.Errorf("Offer error: %v", err)

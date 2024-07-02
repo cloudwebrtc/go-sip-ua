@@ -251,6 +251,8 @@ func NewB2BUA(disableAuth bool, enableTLS bool) *B2BUA {
 			if bridge != nil && call != nil {
 				bridge.Terminate(call)
 			}
+			b.removeCall(sess)
+			b.removeCallBridge(sess)
 		}
 	}
 
@@ -269,6 +271,10 @@ func (b *B2BUA) findCall(sess *session.Session) *Call {
 		return call
 	}
 	return nil
+}
+
+func (b *B2BUA) removeCall(sess *session.Session) {
+	delete(b.calls, sess)
 }
 
 func (b *B2BUA) BridgedCalls() []*CallBridge {

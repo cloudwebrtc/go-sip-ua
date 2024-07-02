@@ -6,6 +6,8 @@ const (
 	B2BCall       BridgeType = "B2BCall"
 	OriginateCall BridgeType = "OriginateCall"
 	Conference    BridgeType = "Conference"
+	PlayBack      BridgeType = "PlayBack"
+	Record        BridgeType = "Record"
 )
 
 type CallBridge struct {
