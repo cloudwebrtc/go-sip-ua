@@ -29,13 +29,16 @@ type UdpTansport struct {
 	closed    utils.AtomicBool
 	ctx       context.Context
 	cancel    context.CancelFunc
+
+	id string
 }
 
-func NewUdpTansport(trackInfos []*TrackInfo) *UdpTansport {
+func NewUdpTansport(id string, trackInfos []*TrackInfo) *UdpTansport {
 	t := &UdpTansport{
 		trackInfos: trackInfos,
 		ports:      make(map[TrackType]*UdpPort),
 		videoSSRC:  0,
+		id:         id,
 	}
 
 	t.ctx, t.cancel = context.WithCancel(context.TODO())
@@ -79,7 +82,7 @@ func (c *UdpTansport) Init(config CallConfig) error {
 			rRtcpAddr, _ = net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", trackInfo.Connection.Address, trackInfo.RtcpPort))
 		}
 
-		udpPort, err := NewUdpPort(trackInfo.TrackType, rAddr, rRtcpAddr, config.ExternalRtpAddress)
+		udpPort, err := NewUdpPort(c.id, trackInfo.TrackType, rAddr, rRtcpAddr, config.ExternalRtpAddress)
 		if err != nil {
 			return err
 		}
@@ -255,23 +258,9 @@ func (c *UdpTansport) OnAnswer(answer *Desc) error {
 	if err != nil {
 		return err
 	}
-	/*
-		=0
-		o=100 703 1242 IN IP4 192.168.1.154
-		s=Talk
-		c=IN IP4 192.168.1.154
-		t=0 0
-		m=audio 40063 RTP/AVP 0 8 116
-		a=rtpmap:116 telephone-event/8000
-		a=rtcp:49374
-		m=video 47878 RTP/AVP 96
-		a=rtpmap:96 H264/90000
-		a=fmtp:96 profile-level-id=42801F; packetization-mode=1
-		a=rtcp:37679
-	*/
 	conn := sess.Connection
 	if conn != nil {
-		logger.Infof("remote connection address: %s", conn.Address)
+		logger.Debugf("remote connection address: %s", conn.Address)
 	}
 	c.remoteDescription = sess
 	return nil

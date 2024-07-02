@@ -48,7 +48,7 @@ var (
 )
 
 func init() {
-	logger = utils.NewLogrusLogger(log.InfoLevel, "B2BUA", nil)
+	logger = utils.NewLogrusLogger(utils.DefaultLogLevel, "B2BUA", nil)
 	callConfig = CallConfig{
 		Codecs:             []string{"PCMU", "PCMA", "opus", "H264"},
 		ExternalRtpAddress: "0.0.0.0",
@@ -103,7 +103,6 @@ func NewB2BUA(disableAuth bool, enableTLS bool) *B2BUA {
 	}
 
 	ua := ua.NewUserAgent(&ua.UserAgentConfig{
-
 		SipStack: stack,
 	})
 
@@ -111,6 +110,9 @@ func NewB2BUA(disableAuth bool, enableTLS bool) *B2BUA {
 		logger.Infof("InviteStateHandler: state => %v, type => %s", state, sess.Direction())
 
 		switch state {
+		// Handle outgoing call.
+		case session.InviteSent:
+
 		// Handle incoming call.
 		case session.InviteReceived:
 			to, _ := (*req).To()
@@ -277,6 +279,11 @@ func (b *B2BUA) removeCall(sess *session.Session) {
 	}
 }
 
+// Originate .
+func (b *B2BUA) Originate(source string, destination string) {
+	logger.Infof("Originate %s => %s", source, destination)
+}
+
 // Shutdown .
 func (b *B2BUA) Shutdown() {
 	b.ua.Shutdown()
@@ -363,7 +370,6 @@ func (b *B2BUA) handleRegister(request sip.Request, tx sip.ServerTransaction) {
 	sip.CopyHeaders("Expires", request, resp)
 	utils.BuildContactHeader("Contact", request, resp, &expires)
 	tx.Respond(resp)
-
 }
 
 func (b *B2BUA) handleConnectionError(connError *transport.ConnectionError) {

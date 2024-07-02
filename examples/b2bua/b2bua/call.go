@@ -46,7 +46,7 @@ type B2BCall struct {
 }
 
 func (b *B2BCall) ToString() string {
-	return b.src.Contact() + " => " + b.dest.Contact()
+	return (*b.src.CallID()).String() + ", src " + b.src.Contact() + " => dest" + b.dest.Contact()
 }
 
 func (b *B2BCall) Init() {
@@ -112,7 +112,7 @@ func (b *B2BCall) SetALegOffer(sdp *Desc) error {
 	if transType == TransportTypeRTC {
 		trans = NewWebRTCTransport(trackInfos)
 	} else {
-		trans = NewUdpTansport(trackInfos)
+		trans = NewUdpTansport("inc-"+string(*b.src.CallID()), trackInfos)
 	}
 
 	err = trans.Init(callConfig)
@@ -139,7 +139,7 @@ func (b *B2BCall) CreateBLegOffer(tpType TransportType) (*Desc, error) {
 	if tpType == TransportTypeRTC {
 		trans = NewWebRTCTransport(b.srcTrackInfos)
 	} else {
-		trans = NewUdpTansport(b.srcTrackInfos)
+		trans = NewUdpTansport("out-"+string(*b.src.CallID()), b.srcTrackInfos)
 	}
 
 	err := trans.Init(callConfig)

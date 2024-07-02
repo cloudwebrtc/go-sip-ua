@@ -46,7 +46,7 @@ func NewInviteSession(reqcb RequestCallback, uaType string,
 		contact:        contact,
 	}
 
-	s.logger = utils.NewLogrusLogger(log.DebugLevel, "Session", nil)
+	s.logger = utils.NewLogrusLogger(utils.DefaultLogLevel, "Session", nil)
 
 	to, _ := req.To()
 	from, _ := req.From()
@@ -104,7 +104,7 @@ func (s *Session) RemoteSdp() string {
 }
 
 func (s *Session) Contact() string {
-	return s.contact.String()
+	return s.contact.Address.String()
 }
 
 func (s *Session) CallID() *sip.CallID {

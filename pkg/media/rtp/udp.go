@@ -23,7 +23,7 @@ type RtpUDPStream struct {
 
 func NewRtpUDPStream(bind string, portMin, portMax int, callback func(pkt []byte, raddr net.Addr)) *RtpUDPStream {
 
-	logger := utils.NewLogrusLogger(log.DebugLevel, "Media", nil)
+	logger := utils.NewLogrusLogger(utils.DefaultLogLevel, "Media", nil)
 
 	lAddr := &net.UDPAddr{IP: net.ParseIP(bind), Port: 0}
 	var err error

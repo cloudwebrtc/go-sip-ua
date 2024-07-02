@@ -60,7 +60,7 @@ func NewUserAgent(config *UserAgentConfig) *UserAgent {
 		iss:                  sync.Map{},
 		InviteStateHandler:   nil,
 		RegisterStateHandler: nil,
-		log:                  utils.NewLogrusLogger(log.DebugLevel, "UserAgent", nil),
+		log:                  utils.NewLogrusLogger(utils.DefaultLogLevel, "UserAgent", nil),
 	}
 	stack := config.SipStack
 	stack.OnRequest(sip.INVITE, ua.handleInvite)

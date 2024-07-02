@@ -20,6 +20,7 @@ func completer(d prompt.Document) []prompt.Suggest {
 		{Text: "users", Description: "Show sip accounts"},
 		{Text: "onlines", Description: "Show online sip devices"},
 		{Text: "calls", Description: "Show active calls"},
+		{Text: "originate", Description: "Originate a call and bridge to another call"},
 		{Text: "set debug on", Description: "Show debug msg in console"},
 		{Text: "set debug off", Description: "Turn off debug msg in console"},
 		{Text: "show loggers", Description: "Print Loggers"},
@@ -38,6 +39,21 @@ Options:
 }
 
 func consoleLoop(b2bua *b2bua.B2BUA) {
+
+	usersCompleter := func(d prompt.Document) []prompt.Suggest {
+		accounts := b2bua.GetAccounts()
+		s := make([]prompt.Suggest, 0, len(accounts))
+		for user := range accounts {
+			s = append(s, prompt.Suggest{Text: user, Description: "User"})
+		}
+		aors := b2bua.GetRegistry().GetAllContacts()
+		for aor := range aors {
+			for _, instance := range aors[aor] {
+				s = append(s, prompt.Suggest{Text: instance.Contact.Address.String(), Description: "online device"})
+			}
+		}
+		return prompt.FilterHasPrefix(s, d.GetWordBeforeCursor(), true)
+	}
 
 	fmt.Println("Please select command.")
 	for {
@@ -74,6 +90,12 @@ func consoleLoop(b2bua *b2bua.B2BUA) {
 			} else {
 				fmt.Printf("No users\n")
 			}
+		case "originate":
+			fmt.Printf("Please enter the source user: ")
+			source := prompt.Input("Source> ", usersCompleter)
+			fmt.Printf("Please enter the destination user: ")
+			destination := prompt.Input("Destination> ", usersCompleter)
+			b2bua.Originate(source, destination)
 		case "calls":
 			fallthrough
 		case "cl": /* call list*/
@@ -81,7 +103,7 @@ func consoleLoop(b2bua *b2bua.B2BUA) {
 			if len(calls) > 0 {
 				fmt.Printf("Calls:\n")
 				for _, call := range calls {
-					fmt.Printf("%v:\n", call.ToString())
+					fmt.Printf("%v\n", call.ToString())
 				}
 			} else {
 				fmt.Printf("No active calls\n")

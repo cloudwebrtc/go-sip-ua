@@ -34,7 +34,8 @@ func (ml *MyLogger) Level() string {
 }
 
 var (
-	loggers map[string]*MyLogger
+	loggers         map[string]*MyLogger
+	DefaultLogLevel = log.InfoLevel
 )
 
 func init() {
