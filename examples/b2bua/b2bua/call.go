@@ -2,7 +2,6 @@ package b2bua
 
 import (
 	"github.com/cloudwebrtc/go-sip-ua/pkg/session"
-	"github.com/cloudwebrtc/go-sip-ua/pkg/ua"
 	"github.com/pixelbender/go-sdp/sdp"
 )
 
@@ -32,126 +31,104 @@ func (d *Desc) FromSdpSession(sess *sdp.Session) error {
 	return nil
 }
 
-type B2BCall struct {
-	ua   *ua.UserAgent
-	src  *session.Session
-	dest *session.Session
-
-	srcTrans  Transport
-	destTrans Transport
-
-	state CallState
+type Call struct {
+	// sip session
+	sess *session.Session
+	// media transport
+	mediaTransport MediaTransport
 
 	srcTrackInfos []*TrackInfo
 }
 
-func (b *B2BCall) ToString() string {
-	return (*b.src.CallID()).String() + ", src " + b.src.Contact() + " => dest" + b.dest.Contact()
-}
-
-func (b *B2BCall) Init() {
-	b.state = New
-}
-
-func (b *B2BCall) State() CallState {
-	return b.state
-}
-
-func (b *B2BCall) SetState(state CallState) {
-	b.state = state
-}
-
-func (b *B2BCall) Terminate(sess *session.Session) {
-
-	b.srcTrans.OnRtpPacket(nil)
-	b.destTrans.OnRtpPacket(nil)
-
-	b.srcTrans.OnRtcpPacket(nil)
-	b.destTrans.OnRtcpPacket(nil)
-
-	if err := b.srcTrans.Close(); err != nil {
-		logger.Errorf("Close src transport error: %v", err)
-	}
-
-	if err := b.destTrans.Close(); err != nil {
-		logger.Errorf("Close dest transport error: %v", err)
-	}
-
-	if b.src == sess {
-		if b.state != Confirmed {
-			b.dest.End()
-		} else {
-			b.dest.Bye()
-		}
-	} else if b.dest == sess {
-		if b.state != Confirmed {
-			b.src.End()
-		} else {
-			b.src.Bye()
-		}
-	}
-	b.state = Terminated
-}
-
-func (b *B2BCall) SetALegOffer(sdp *Desc) error {
-
-	sdpSess, _ := sdp.Parse()
-	transType := ParseTransportType(sdpSess)
-	logger.Infof("TransportType: %v", transType)
-	trackInfos, err := ParseTrackInfos(sdpSess)
-	if err != nil {
-		logger.Errorf("ParseTrackInfos error: %v", err)
-		return err
-	}
-
-	logger.Infof("TrackInfos: %v", trackInfos)
+func (b *Call) Init(transType MediaTransportType, trackInfos []*TrackInfo) {
 	b.srcTrackInfos = trackInfos
-	print(sdpSess.String())
 
-	var trans Transport
-	if transType == TransportTypeRTC {
-		trans = NewWebRTCTransport(trackInfos)
+	if transType == TransportTypeWebRTC {
+		b.mediaTransport = NewWebRTCMediaTransport(trackInfos)
 	} else {
-		trans = NewUdpTansport("inc-"+string(*b.src.CallID()), trackInfos)
+		b.mediaTransport = NewStandardMediaTransport(trackInfos)
 	}
 
-	err = trans.Init(callConfig)
+	b.mediaTransport.Init(callConfig)
+}
 
-	if err != nil {
-		logger.Errorf("Init transport error: %v", err)
-		return err
+func (b *Call) Id() string {
+	return string(b.sess.CallID())
+}
+
+func (b *Call) ToString() string {
+	return (b.sess.CallID()).String() + ", uri: " + b.sess.Contact()
+}
+
+func (b *Call) Accept(answer string) {
+	if aLegAnswer, err := b.mediaTransport.CreateAnswer(); err != nil {
+		logger.Errorf("Create A-Leg Answer failed: %v", err)
+		return
+	} else {
+		// for sdp fix
+		replaceCodec(aLegAnswer, answer)
+		b.sess.ProvideAnswer(aLegAnswer.SDP)
 	}
+	b.sess.Accept(200)
+}
 
-	err = trans.OnOffer(sdp)
+func (b *Call) Terminate() {
+	if b.sess.IsEstablished() {
+		b.sess.Bye()
+	} else if b.sess.IsInProgress() {
+		b.sess.End()
+	}
+	b.mediaTransport.OnRtpPacket(nil)
+	b.mediaTransport.OnRtcpPacket(nil)
+	if err := b.mediaTransport.Close(); err != nil {
+		logger.Errorf("Close media transport error: %v", err)
+	}
+}
+
+func (b *Call) OnOffer(sdp *Desc) error {
+	/*
+		sdpSess, _ := sdp.Parse()
+		transType := ParseTransportType(sdpSess)
+		logger.Infof("TransportType: %v", transType)
+		trackInfos, err := ParseTrackInfos(sdpSess)
+		if err != nil {
+			logger.Errorf("ParseTrackInfos error: %v", err)
+			return err
+		}
+
+		logger.Infof("TrackInfos: %v", trackInfos)
+		b.srcTrackInfos = trackInfos
+		print(sdpSess.String())
+	*/
+
+	err := b.mediaTransport.OnOffer(sdp)
 	if err != nil {
 		logger.Errorf("OnOffer error: %v", err)
 		return err
 	}
-
-	b.srcTrans = trans
 	return nil
 }
 
-func (b *B2BCall) CreateBLegOffer(tpType TransportType) (*Desc, error) {
+func (b *Call) CreateOffer() (*Desc, error) {
+	/*
+		var trans MediaTransport
 
-	var trans Transport
+		if tpType == TransportTypeWebRTC {
+			trans = NewWebRTCMediaTransport(b.srcTrackInfos)
+		} else {
+			trans = NewStandardMediaTransport("out-"+string(*b.src.CallID()), b.srcTrackInfos)
+		}
 
-	if tpType == TransportTypeRTC {
-		trans = NewWebRTCTransport(b.srcTrackInfos)
-	} else {
-		trans = NewUdpTansport("out-"+string(*b.src.CallID()), b.srcTrackInfos)
-	}
+		err := trans.Init(callConfig)
 
-	err := trans.Init(callConfig)
+		if err != nil {
+			logger.Errorf("Init transport error: %v", err)
+			return nil, err
+		}
 
-	if err != nil {
-		logger.Errorf("Init transport error: %v", err)
-		return nil, err
-	}
-
-	b.destTrans = trans
-
-	offer, err := trans.CreateOffer()
+		b.destTrans = trans
+	*/
+	offer, err := b.mediaTransport.CreateOffer()
 	if err != nil {
 		logger.Errorf("Offer error: %v", err)
 		return nil, err
@@ -159,8 +136,8 @@ func (b *B2BCall) CreateBLegOffer(tpType TransportType) (*Desc, error) {
 	return offer, nil
 }
 
-func (b *B2BCall) SetBLegAnswer(sdp *Desc) error {
-	err := b.destTrans.OnAnswer(sdp)
+func (b *Call) OnAnswer(sdp *Desc) error {
+	err := b.mediaTransport.OnAnswer(sdp)
 	if err != nil {
 		logger.Errorf("OnAnswer error: %v", err)
 		return err
@@ -169,52 +146,11 @@ func (b *B2BCall) SetBLegAnswer(sdp *Desc) error {
 	return nil
 }
 
-func (b *B2BCall) CreateALegAnswer() (*Desc, error) {
-	answer, err := b.srcTrans.CreateAnswer()
+func (b *Call) CreateAnswer() (*Desc, error) {
+	answer, err := b.mediaTransport.CreateAnswer()
 	if err != nil {
 		logger.Errorf("Answer error: %v", err)
 		return nil, err
 	}
 	return answer, nil
-}
-
-func (b *B2BCall) BridgeMediaStream() error {
-	b.srcTrans.OnRtpPacket(func(trackType TrackType, payload []byte) {
-		_, err := b.destTrans.WriteRTP(trackType, payload)
-		if err != nil {
-			logger.Warnf("WriteRTP[%v] %v error: %v", b.destTrans.Type(), trackType, err)
-		}
-	})
-	b.srcTrans.OnRtcpPacket(func(trackType TrackType, payload []byte) {
-		_, err := b.destTrans.WriteRTCP(trackType, payload)
-		if err != nil {
-			logger.Warnf("WriteRTCP[%v] %v error: %v", b.destTrans.Type(), trackType, err)
-		}
-	})
-	b.srcTrans.OnRequestKeyFrame(func() {
-		err := b.destTrans.RequestKeyFrame()
-		if err != nil {
-			logger.Warnf("OnRequestKeyFrame[%v]  error: %v", b.destTrans.Type(), err)
-		}
-	})
-
-	b.destTrans.OnRtpPacket(func(trackType TrackType, payload []byte) {
-		_, err := b.srcTrans.WriteRTP(trackType, payload)
-		if err != nil {
-			logger.Warnf("WriteRTP[%v] %v error: %v", b.srcTrans.Type(), trackType, err)
-		}
-	})
-	b.destTrans.OnRtcpPacket(func(trackType TrackType, payload []byte) {
-		_, err := b.srcTrans.WriteRTCP(trackType, payload)
-		if err != nil {
-			logger.Warnf("WriteRTCP[%v] %v error: %v", b.srcTrans.Type(), trackType, err)
-		}
-	})
-	b.destTrans.OnRequestKeyFrame(func() {
-		err := b.srcTrans.RequestKeyFrame()
-		if err != nil {
-			logger.Warnf("OnRequestKeyFrame[%v]  error: %v", b.srcTrans.Type(), err)
-		}
-	})
-	return nil
 }

@@ -22,16 +22,14 @@ type UdpPort struct {
 	externalRtpAddress string
 	rAddr              *net.UDPAddr
 	rRtcpAddr          *net.UDPAddr
-	id                 string
 }
 
-func NewUdpPort(id string, trackType TrackType, rAddr, rRtcpAddr *net.UDPAddr, externalRtpAddress string) (*UdpPort, error) {
+func NewUdpPort(trackType TrackType, rAddr, rRtcpAddr *net.UDPAddr, externalRtpAddress string) (*UdpPort, error) {
 	c := &UdpPort{
 		trackType:          trackType,
 		externalRtpAddress: externalRtpAddress,
 		rAddr:              rAddr,
 		rRtcpAddr:          rRtcpAddr,
-		id:                 id,
 	}
 	c.ctx, c.cancel = context.WithCancel(context.TODO())
 	c.closed.Set(false)
@@ -56,7 +54,7 @@ func (c *UdpPort) Init() error {
 		}
 	}
 
-	logger.Infof("[%s-%s] ListenUDP: udp://%s:%v, udp://%s:%v", c.id, c.trackType, host, rtpConns[0].LocalAddr().(*net.UDPAddr).Port, host, rtpConns[1].LocalAddr().(*net.UDPAddr).Port)
+	logger.Infof("[%s] ListenUDP: udp://%s:%v, udp://%s:%v", c.trackType, host, rtpConns[0].LocalAddr().(*net.UDPAddr).Port, host, rtpConns[1].LocalAddr().(*net.UDPAddr).Port)
 
 	go c.loop(rtpConns[0], func(packet []byte, raddr net.Addr) {
 		c.mutex.Lock()

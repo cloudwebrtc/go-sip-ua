@@ -99,10 +99,10 @@ func consoleLoop(b2bua *b2bua.B2BUA) {
 		case "calls":
 			fallthrough
 		case "cl": /* call list*/
-			calls := b2bua.Calls()
-			if len(calls) > 0 {
-				fmt.Printf("Calls:\n")
-				for _, call := range calls {
+			bridges := b2bua.BridgedCalls()
+			if len(bridges) > 0 {
+				fmt.Printf("Bridged Calls:\n")
+				for _, call := range bridges {
 					fmt.Printf("%v\n", call.ToString())
 				}
 			} else {

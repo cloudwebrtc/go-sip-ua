@@ -53,7 +53,7 @@ var (
 	}
 )
 
-type WebRTCTransport struct {
+type WebRTCMediaTransport struct {
 	pc           *webrtc.PeerConnection
 	answer       webrtc.SessionDescription
 	offer        webrtc.SessionDescription
@@ -71,13 +71,13 @@ type WebRTCTransport struct {
 	buff                   *buffer.Buffer
 	bmu                    sync.Mutex
 	mu                     sync.RWMutex
-	rtpHandler             func(trackType TrackType, payload []byte)
-	rtcpHandler            func(trackType TrackType, payload []byte)
-	requestKeyFrameHandler func()
+	rtpHandler             func(trackType TrackType, payload []byte) (int, error)
+	rtcpHandler            func(trackType TrackType, payload []byte) (int, error)
+	requestKeyFrameHandler func() error
 }
 
-func NewWebRTCTransport(trackInfos []*TrackInfo) *WebRTCTransport {
-	c := &WebRTCTransport{
+func NewWebRTCMediaTransport(trackInfos []*TrackInfo) *WebRTCMediaTransport {
+	c := &WebRTCMediaTransport{
 		trackInfos:   trackInfos,
 		localTracks:  make(map[TrackType]*webrtc.TrackLocalStaticRTP),
 		remoteTracks: make(map[TrackType]*webrtc.TrackRemote),
@@ -101,11 +101,11 @@ func NewWebRTCTransport(trackInfos []*TrackInfo) *WebRTCTransport {
 	return c
 }
 
-func (c *WebRTCTransport) Type() TransportType {
-	return TransportTypeRTC
+func (c *WebRTCMediaTransport) Type() MediaTransportType {
+	return TransportTypeWebRTC
 }
 
-func (c *WebRTCTransport) Init(callConfig CallConfig) error {
+func (c *WebRTCMediaTransport) Init(callConfig CallConfig) error {
 	// Create a MediaEngine object to configure the supported codec
 	m := &webrtc.MediaEngine{}
 
@@ -275,47 +275,51 @@ func (c *WebRTCTransport) Init(callConfig CallConfig) error {
 	return nil
 }
 
-func (c *WebRTCTransport) OnRtpPacket(rtpHandler func(trackType TrackType, payload []byte)) {
+func (c *WebRTCMediaTransport) OnRtpPacket(rtpHandler func(trackType TrackType, payload []byte) (int, error)) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.rtpHandler = rtpHandler
 }
 
-func (c *WebRTCTransport) OnRtcpPacket(rtcpHandler func(trackType TrackType, payload []byte)) {
+func (c *WebRTCMediaTransport) OnRtcpPacket(rtcpHandler func(trackType TrackType, payload []byte) (int, error)) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.rtcpHandler = rtcpHandler
 }
 
-func (c *WebRTCTransport) OnRequestKeyFrame(keyHandler func()) {
+func (c *WebRTCMediaTransport) OnRequestKeyFrame(keyHandler func() error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.requestKeyFrameHandler = keyHandler
 }
 
-func (c *WebRTCTransport) onRtpPacket(trackType TrackType, packet []byte) error {
+func (c *WebRTCMediaTransport) onRtpPacket(trackType TrackType, packet []byte) error {
 	logger.Debugf("WebRTCTransport::OnRtpPacketReceived: %v read %d bytes", trackType, len(packet))
 
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	if c.rtpHandler != nil {
-		c.rtpHandler(trackType, packet)
+		if _, err := c.rtpHandler(trackType, packet); err != nil {
+			logger.Errorf("WebRTCTransport::onRtpPacket: panic => %v", err)
+		}
 	}
 	return nil
 }
 
-func (c *WebRTCTransport) onRtcpPacket(trackType TrackType, packet []byte) error {
+func (c *WebRTCMediaTransport) onRtcpPacket(trackType TrackType, packet []byte) error {
 	logger.Debugf("WebRTCTransport::OnRtcpPacketReceived: %v read %d bytes", trackType, len(packet))
 
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	if c.rtcpHandler != nil {
-		c.rtcpHandler(trackType, packet)
+		if _, err := c.rtcpHandler(trackType, packet); err != nil {
+			logger.Errorf("WebRTCTransport::onRtcpPacket: panic => %v", err)
+		}
 	}
 	return nil
 }
 
-func (c *WebRTCTransport) WriteRTP(trackType TrackType, packet []byte) (int, error) {
+func (c *WebRTCMediaTransport) WriteRTP(trackType TrackType, packet []byte) (int, error) {
 	if c.closed.Get() {
 		return 0, fmt.Errorf("WebRTCTransport::SendRtpPacket: closed")
 	}
@@ -346,7 +350,7 @@ func (c *WebRTCTransport) WriteRTP(trackType TrackType, packet []byte) (int, err
 	return 0, fmt.Errorf("WebRTCTransport::SendRtpPacket: invalid trackType %v", trackType)
 }
 
-func (c *WebRTCTransport) WriteRTCP(trackType TrackType, packet []byte) (n int, err error) {
+func (c *WebRTCMediaTransport) WriteRTCP(trackType TrackType, packet []byte) (n int, err error) {
 	if c.closed.Get() {
 		return 0, fmt.Errorf("WebRTCTransport::SendRtcpPacket: closed")
 	}
@@ -362,7 +366,7 @@ func (c *WebRTCTransport) WriteRTCP(trackType TrackType, packet []byte) (n int, 
 	return len(packet), nil
 }
 
-func (c *WebRTCTransport) Close() error {
+func (c *WebRTCMediaTransport) Close() error {
 	if c.closed.Get() {
 		return nil
 	}
@@ -371,7 +375,7 @@ func (c *WebRTCTransport) Close() error {
 	return c.pc.Close()
 }
 
-func (c *WebRTCTransport) AddLocalTracks() error {
+func (c *WebRTCMediaTransport) AddLocalTracks() error {
 
 	for _, trackInfo := range c.trackInfos {
 
@@ -421,7 +425,7 @@ func (c *WebRTCTransport) AddLocalTracks() error {
 	return nil
 }
 
-func (c *WebRTCTransport) CreateOffer() (*Desc, error) {
+func (c *WebRTCMediaTransport) CreateOffer() (*Desc, error) {
 
 	err := c.AddLocalTracks()
 	if err != nil {
@@ -444,7 +448,7 @@ func (c *WebRTCTransport) CreateOffer() (*Desc, error) {
 	return &Desc{SDP: c.offer.SDP, Type: "offer"}, nil
 }
 
-func (c *WebRTCTransport) OnAnswer(answer *Desc) error {
+func (c *WebRTCMediaTransport) OnAnswer(answer *Desc) error {
 	c.answer = webrtc.SessionDescription{
 		Type: webrtc.SDPTypeAnswer,
 		SDP:  answer.SDP,
@@ -456,7 +460,7 @@ func (c *WebRTCTransport) OnAnswer(answer *Desc) error {
 	return nil
 }
 
-func (c *WebRTCTransport) OnOffer(offer *Desc) error {
+func (c *WebRTCMediaTransport) OnOffer(offer *Desc) error {
 
 	err := c.AddLocalTracks()
 	if err != nil {
@@ -476,7 +480,7 @@ func (c *WebRTCTransport) OnOffer(offer *Desc) error {
 	return nil
 }
 
-func (c *WebRTCTransport) CreateAnswer() (*Desc, error) {
+func (c *WebRTCMediaTransport) CreateAnswer() (*Desc, error) {
 	var err error = nil
 	c.answer, err = c.pc.CreateAnswer(nil)
 	if err != nil {
@@ -495,7 +499,7 @@ func (c *WebRTCTransport) CreateAnswer() (*Desc, error) {
 	return &Desc{SDP: c.answer.SDP, Type: "answer"}, nil
 }
 
-func (c *WebRTCTransport) HandleRtcpFb(rtpSender *webrtc.RTPSender) {
+func (c *WebRTCMediaTransport) HandleRtcpFb(rtpSender *webrtc.RTPSender) {
 	// Read incoming RTCP packets
 	// Before these packets are returned they are processed by interceptors. For things
 	// like NACK this needs to be called.
@@ -573,7 +577,7 @@ func (c *WebRTCTransport) HandleRtcpFb(rtpSender *webrtc.RTPSender) {
 	}()
 }
 
-func (c *WebRTCTransport) RequestKeyFrame() error {
+func (c *WebRTCMediaTransport) RequestKeyFrame() error {
 	track := c.remoteTracks[TrackTypeVideo]
 	if track == nil {
 		return fmt.Errorf("video track is nil")
@@ -582,7 +586,7 @@ func (c *WebRTCTransport) RequestKeyFrame() error {
 	return nil
 }
 
-func (c *WebRTCTransport) RetransmitPackets(nackedPackets []packetMeta) error {
+func (c *WebRTCMediaTransport) RetransmitPackets(nackedPackets []packetMeta) error {
 	c.bmu.Lock()
 	defer c.bmu.Unlock()
 	if c.buff == nil {

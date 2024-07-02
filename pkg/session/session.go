@@ -107,8 +107,8 @@ func (s *Session) Contact() string {
 	return s.contact.Address.String()
 }
 
-func (s *Session) CallID() *sip.CallID {
-	return &s.callID
+func (s *Session) CallID() sip.CallID {
+	return s.callID
 }
 
 func (s *Session) Request() sip.Request {

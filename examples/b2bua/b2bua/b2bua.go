@@ -34,12 +34,13 @@ func pushCallback(pn *registry.PNParams, payload map[string]string) error {
 
 // B2BUA .
 type B2BUA struct {
-	stack    *stack.SipStack
-	ua       *ua.UserAgent
-	accounts map[string]string
-	registry registry.Registry
-	calls    []*B2BCall
-	rfc8599  *registry.RFC8599
+	stack       *stack.SipStack
+	ua          *ua.UserAgent
+	accounts    map[string]string
+	registry    registry.Registry
+	callBridges []*CallBridge
+	calls       map[*session.Session]*Call
+	rfc8599     *registry.RFC8599
 }
 
 var (
@@ -62,6 +63,7 @@ func NewB2BUA(disableAuth bool, enableTLS bool) *B2BUA {
 		registry: registry.Registry(registry.NewMemoryRegistry()),
 		accounts: make(map[string]string),
 		rfc8599:  registry.NewRFC8599(pushCallback),
+		calls:    make(map[*session.Session]*Call),
 	}
 
 	var authenticator *auth.ServerAuthorizer = nil
@@ -125,12 +127,21 @@ func NewB2BUA(disableAuth bool, enableTLS bool) *B2BUA {
 				if from.DisplayName != nil {
 					displayName = from.DisplayName.String()
 				}
-				call := &B2BCall{src: sess, ua: ua}
 
-				call.Init()
+				offer := &Desc{Type: "offer", SDP: sess.RemoteSdp()}
+				sdpSess, _ := offer.Parse()
+				transType := ParseTransportType(sdpSess)
 
-				offer := sess.RemoteSdp()
-				call.SetALegOffer(&Desc{Type: "offer", SDP: offer})
+				trackInfos, err := ParseTrackInfos(sdpSess)
+				if err != nil {
+					logger.Errorf("ParseTrackInfos error: %v", err)
+					return
+				}
+
+				src := &Call{sess: sess}
+				src.Init(transType, trackInfos)
+				src.OnOffer(offer)
+				b.calls[sess] = src
 
 				// Create a temporary profile. In the future, it will support reading profiles from files or data
 				// For example: use a specific ip or sip account as outbound trunk
@@ -140,23 +151,28 @@ func NewB2BUA(disableAuth bool, enableTLS bool) *B2BUA {
 				if err2 != nil {
 					logger.Error(err2)
 				}
-				var tpType = TransportTypeSIP
+				var tpType = TransportTypeStandard
 				if instance.SupportIce() {
-					tpType = TransportTypeRTC
+					tpType = TransportTypeWebRTC
 				}
-				bLegOffer, _ := call.CreateBLegOffer(tpType)
 
-				dest, err := ua.Invite(profile, called, recipient, &bLegOffer.SDP)
+				dest := &Call{}
+				dest.Init(tpType, trackInfos)
+				destOffer, _ := dest.CreateOffer()
+
+				dsess, err := ua.Invite(profile, called, recipient, &destOffer.SDP)
 				if err != nil {
 					logger.Errorf("B-Leg session error: %v", err)
 					return
 				}
 
-				call.dest = dest
+				dest.sess = dsess
+				b.calls[dsess] = dest
 
-				b.calls = append(b.calls, call)
-
-				call.SetState(Connecting)
+				bridge := &CallBridge{src: src, dest: dest, bType: B2BCall}
+				bridge.Init()
+				bridge.SetState(Connecting)
+				b.callBridges = append(b.callBridges, bridge)
 			}
 
 			// Try to find online contact records.
@@ -183,6 +199,7 @@ func NewB2BUA(disableAuth bool, enableTLS bool) *B2BUA {
 				return
 			}
 
+			logger.Warnf("Not found any records for %v", called)
 			// Could not found any records
 			sess.Reject(404, fmt.Sprintf("%v Not found", called))
 
@@ -198,36 +215,28 @@ func NewB2BUA(disableAuth bool, enableTLS bool) *B2BUA {
 
 		// Handle 1XX
 		case session.EarlyMedia:
-			fallthrough
+			//bridge.SetState(EarlyMedia)
+			//bridge.src.Provisional((*resp).StatusCode(), (*resp).Reason())
 		case session.Provisional:
 			call := b.findCall(sess)
-			if call != nil && call.dest == sess {
+			if call != nil {
 				//answer := call.dest.RemoteSdp()
-
-				//call.SetBLegAnswer(&Desc{Type: "answer", SDP: answer})
-
+				//call.OnAnswer(&Desc{Type: "answer", SDP: answer})
 			}
-
 		// Handle 200OK or ACK
 		case session.Confirmed:
 			//TODO: Add support for forked calls
 			call := b.findCall(sess)
-			if call != nil && call.dest == sess {
-				answer := call.dest.RemoteSdp()
-				call.SetBLegAnswer(&Desc{Type: "answer", SDP: answer})
-				if aLegAnswer, err := call.CreateALegAnswer(); err != nil {
-					logger.Errorf("Create A-Leg Answer failed: %v", err)
-					return
-				} else {
-					replaceCodec(aLegAnswer, answer)
-					call.src.ProvideAnswer(aLegAnswer.SDP)
+			if call != nil && sess.Direction() == session.Outgoing {
+				answer := call.sess.RemoteSdp()
+				call.OnAnswer(&Desc{Type: "answer", SDP: answer})
+				bridge := b.findBridgedCall(sess)
+				if bridge != nil && bridge.dest.sess == sess && bridge.bType == B2BCall {
+					bridge.dest.OnAnswer(&Desc{Type: "answer", SDP: answer})
+					bridge.src.Accept(answer)
+					BridgeMediaStream(bridge.src.mediaTransport, bridge.dest.mediaTransport)
+					bridge.SetState(Confirmed)
 				}
-
-				//call.SetState(EarlyMedia)
-				//call.src.Provisional((*resp).StatusCode(), (*resp).Reason())
-				call.src.Accept(200)
-				call.BridgeMediaStream()
-				call.SetState(Confirmed)
 			}
 
 		// Handle 4XX+
@@ -237,13 +246,11 @@ func NewB2BUA(disableAuth bool, enableTLS bool) *B2BUA {
 			fallthrough
 		case session.Terminated:
 			//TODO: Add support for forked calls
+			bridge := b.findBridgedCall(sess)
 			call := b.findCall(sess)
-			if call != nil {
-				call.Terminate(sess)
+			if bridge != nil && call != nil {
+				bridge.Terminate(call)
 			}
-
-			b.removeCall(sess)
-
 		}
 	}
 
@@ -257,23 +264,30 @@ func NewB2BUA(disableAuth bool, enableTLS bool) *B2BUA {
 	return b
 }
 
-func (b *B2BUA) Calls() []*B2BCall {
-	return b.calls
+func (b *B2BUA) findCall(sess *session.Session) *Call {
+	if call, found := b.calls[sess]; found {
+		return call
+	}
+	return nil
 }
 
-func (b *B2BUA) findCall(sess *session.Session) *B2BCall {
-	for _, call := range b.calls {
-		if call.src == sess || call.dest == sess {
+func (b *B2BUA) BridgedCalls() []*CallBridge {
+	return b.callBridges
+}
+
+func (b *B2BUA) findBridgedCall(sess *session.Session) *CallBridge {
+	for _, call := range b.callBridges {
+		if call.src.sess == sess || call.dest.sess == sess {
 			return call
 		}
 	}
 	return nil
 }
 
-func (b *B2BUA) removeCall(sess *session.Session) {
-	for idx, call := range b.calls {
-		if call.src == sess || call.dest == sess {
-			b.calls = append(b.calls[:idx], b.calls[idx+1:]...)
+func (b *B2BUA) removeCallBridge(sess *session.Session) {
+	for idx, call := range b.callBridges {
+		if call.src.sess == sess || call.dest.sess == sess {
+			b.callBridges = append(b.callBridges[:idx], b.callBridges[idx+1:]...)
 			return
 		}
 	}
@@ -282,6 +296,59 @@ func (b *B2BUA) removeCall(sess *session.Session) {
 // Originate .
 func (b *B2BUA) Originate(source string, destination string) {
 	logger.Infof("Originate %s => %s", source, destination)
+	/*
+		doInvite := func(recipient sip.SipUri, tpType TransportType) {
+			displayName := ""
+			caller, _ := parser.ParseUri("sip:" + source)
+			call := &CallBridge{}
+
+			call.Init()
+
+			offer := sess.RemoteSdp()
+			call.SetALegOffer(&Desc{Type: "offer", SDP: offer})
+
+			// Create a temporary profile. In the future, it will support reading profiles from files or data
+			// For example: use a specific ip or sip account as outbound trunk
+			profile := account.NewProfile(caller, displayName, nil, 0, b.stack)
+
+			bLegOffer, _ := call.CreateBLegOffer(tpType)
+
+			dest, err := b.ua.Invite(profile, caller, recipient, &bLegOffer.SDP)
+			if err != nil {
+				logger.Errorf("Can't send invite, error: %v", err)
+				return
+			}
+
+			call.dest = dest
+		}
+
+		srcUri, err := parser.ParseUri("sip:" + source)
+		if err != nil {
+			logger.Error(err)
+			return
+		}
+
+		destUri, err := parser.ParseSipUri("sip:" + destination)
+		if err != nil {
+			logger.Error(err)
+			return
+		}
+
+		// Try to find online contact records.
+		if contacts, found := b.registry.GetContacts(srcUri); found {
+			for _, instance := range *contacts {
+				var tpType = TransportTypeSIP
+				if instance.SupportIce() {
+					tpType = TransportTypeRTC
+				}
+				recipient, err2 := parser.ParseSipUri("sip:" + instance.Contact.Address.User().String() + "@" + instance.Source + ";transport=" + instance.Transport)
+				if err2 != nil {
+					logger.Error(err2)
+				}
+				doInvite(recipient, tpType)
+			}
+			return
+		}*/
 }
 
 // Shutdown .
