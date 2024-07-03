@@ -10,6 +10,7 @@ import (
 	"github.com/cloudwebrtc/go-sip-ua/pkg/ua"
 	"github.com/ghettovoice/gosip/sip"
 	"github.com/ghettovoice/gosip/sip/parser"
+	"github.com/ghettovoice/gosip/util"
 	"github.com/pixelbender/go-sdp/sdp"
 )
 
@@ -39,26 +40,20 @@ func (s *CallService) inviteStateHandler(sess *session.Session, req *sip.Request
 	logger.Infof("InviteStateHandler: sess %v, state => %v, type => %s", sess.CallID().String(), state, sess.Direction())
 
 	switch state {
-	// Handle outgoing call.
-	case session.InviteSent:
-		call := s.findCall(sess)
-		if call != nil {
-			//TODO: Add support for forked calls
-		}
 	// Handle incoming call.
 	case session.InviteReceived:
 		offer := &Desc{Type: "offer", SDP: sess.RemoteSdp()}
 		sdpSess, _ := offer.Parse()
 		transType := ParseTransportType(sdpSess)
 
-		trackInfos, err := ParseTrackInfos(sdpSess)
+		md, err := ParseMediaDescription(sdpSess)
 		if err != nil {
 			logger.Errorf("ParseTrackInfos error: %v", err)
 			return
 		}
 
 		src := &Call{sess: sess}
-		src.Init(transType, trackInfos)
+		src.Init(transType, md)
 		src.OnOffer(offer)
 		s.calls[sess] = src
 
@@ -139,7 +134,7 @@ func (s *CallService) handleIncomingCall(src *Call, req *sip.Request) (sip.Statu
 	// Try to find online contact records.
 	if contacts, found := s.registry.GetContacts(called); found {
 		for _, instance := range *contacts {
-			dest, err := s.makeOutgoingCall(caller, displayName, called, instance, src.originalTrackInfos)
+			dest, err := s.makeOutgoingCall(caller, displayName, called, instance, src.originalMediaDesc)
 			if err != nil {
 				logger.Errorf("makeOutgoingCall error: %v", err)
 				return 500, err
@@ -160,7 +155,7 @@ func (s *CallService) handleIncomingCall(src *Call, req *sip.Request) (sip.Statu
 				src.Reject(500, "Push failed")
 				return 500, err
 			}
-			dest, err := s.makeOutgoingCall(caller, displayName, called, instance, src.originalTrackInfos)
+			dest, err := s.makeOutgoingCall(caller, displayName, called, instance, src.originalMediaDesc)
 			if err != nil {
 				logger.Errorf("makeOutgoingCall error: %v", err)
 				return 500, err
@@ -171,7 +166,7 @@ func (s *CallService) handleIncomingCall(src *Call, req *sip.Request) (sip.Statu
 	}
 
 	// try make direct call
-	dest, err := s.makeOutgoingCall(caller, displayName, called, nil, src.originalTrackInfos)
+	dest, err := s.makeOutgoingCall(caller, displayName, called, nil, src.originalMediaDesc)
 	if err != nil {
 		logger.Errorf("makeOutgoingCall error: %v", err)
 		return 500, err
@@ -189,7 +184,7 @@ func (s *CallService) StoreBridgedCall(src, dest *Call, bType BridgeType) *CallB
 	return bridge
 }
 
-func (s *CallService) makeOutgoingCall(caller sip.Uri, displayName string, called sip.Uri, instance *registry.ContactInstance, trackInfos []*TrackInfo) (*Call, error) {
+func (s *CallService) makeOutgoingCall(caller sip.Uri, displayName string, called sip.Uri, instance *registry.ContactInstance, md *MediaDescription) (*Call, error) {
 
 	profile := account.NewProfile(caller, displayName, nil, 0, s.stack)
 
@@ -212,7 +207,7 @@ func (s *CallService) makeOutgoingCall(caller sip.Uri, displayName string, calle
 	}
 
 	dest := &Call{}
-	dest.Init(tpType, trackInfos)
+	dest.Init(tpType, md)
 	destOffer, _ := dest.CreateOffer()
 
 	sess, err := s.ua.Invite(profile, called, recipient, &destOffer.SDP)
@@ -288,14 +283,28 @@ func (s *CallService) Originate(source string, destination string) error {
 		videoCodecs = append(videoCodecs, codec)
 	}
 
-	originalTrackInfos := []*TrackInfo{
-		{TrackType: TrackTypeAudio, Direction: "sendrecv", Codecs: audioCodecs},
-		{TrackType: TrackTypeVideo, Direction: "sendrecv", Codecs: videoCodecs},
+	originalTrackInfos := map[TrackType]*TrackInfo{
+		TrackTypeAudio: {TrackType: TrackTypeAudio, Direction: "sendrecv", Codecs: audioCodecs},
+		TrackTypeVideo: {TrackType: TrackTypeVideo, Direction: "sendrecv", Codecs: videoCodecs},
+	}
+
+	host := b2buaConfig.UaMediaConfig.ExternalRtpAddress
+	if host == "" || host == "0.0.0.0" {
+		if v, err := util.ResolveSelfIP(); err == nil {
+			host = v.String()
+		}
+	}
+
+	md := &MediaDescription{
+		Tracks: originalTrackInfos,
+		Connection: &sdp.Connection{
+			Address: host,
+		},
 	}
 	var err2 error = nil
 	if contacts, found := s.registry.GetContacts(srcUri); found {
 		for _, instance := range *contacts {
-			srcCall, err2 = s.makeOutgoingCall(srcUri, displayName, destUri, instance, originalTrackInfos)
+			srcCall, err2 = s.makeOutgoingCall(srcUri, displayName, destUri, instance, md)
 			if err != nil {
 				logger.Errorf("Originate error: %v", err)
 				return err2
@@ -305,7 +314,7 @@ func (s *CallService) Originate(source string, destination string) error {
 
 	if contacts, found := s.registry.GetContacts(destUri); found {
 		for _, instance := range *contacts {
-			destCall, err2 = s.makeOutgoingCall(destUri, displayName, srcUri, instance, originalTrackInfos)
+			destCall, err2 = s.makeOutgoingCall(destUri, displayName, srcUri, instance, md)
 			if err != nil {
 				logger.Errorf("Originate error: %v", err)
 				return err2

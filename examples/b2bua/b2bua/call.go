@@ -3,7 +3,6 @@ package b2bua
 import (
 	"github.com/cloudwebrtc/go-sip-ua/pkg/session"
 	"github.com/ghettovoice/gosip/sip"
-	"github.com/pixelbender/go-sdp/sdp"
 )
 
 type CallState string
@@ -22,36 +21,22 @@ func (s CallState) String() string {
 	return string(s)
 }
 
-type Desc struct {
-	Type string `json:"type"`
-	SDP  string `json:"sdp"`
-}
-
-func (d *Desc) Parse() (*sdp.Session, error) {
-	return sdp.Parse([]byte(d.SDP))
-}
-
-func (d *Desc) FromSdpSession(sess *sdp.Session) error {
-	d.SDP = sess.String()
-	return nil
-}
-
 type Call struct {
 	// sip session
 	sess *session.Session
 	// media transport
 	mediaTransport MediaTransport
 
-	originalTrackInfos []*TrackInfo
+	originalMediaDesc *MediaDescription
 }
 
-func (b *Call) Init(transType MediaTransportType, trackInfos []*TrackInfo) {
-	b.originalTrackInfos = trackInfos
+func (b *Call) Init(transType MediaTransportType, md *MediaDescription) {
+	b.originalMediaDesc = md
 
 	if transType == TransportTypeWebRTC {
-		b.mediaTransport = NewWebRTCMediaTransport(trackInfos)
+		b.mediaTransport = NewWebRTCMediaTransport(md)
 	} else {
-		b.mediaTransport = NewStandardMediaTransport(trackInfos)
+		b.mediaTransport = NewStandardMediaTransport(md)
 	}
 
 	b.mediaTransport.Init(b2buaConfig.UaMediaConfig)
@@ -67,7 +52,7 @@ func (b *Call) ToString() string {
 
 func (b *Call) MediaInfo() string {
 	info := "[" + b.mediaTransport.Type().String() + "]"
-	for _, trackInfo := range b.originalTrackInfos {
+	for _, trackInfo := range b.originalMediaDesc.Tracks {
 		info += trackInfo.String() + " "
 	}
 	return info

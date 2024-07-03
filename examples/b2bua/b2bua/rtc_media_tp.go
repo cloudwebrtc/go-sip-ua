@@ -62,7 +62,7 @@ type WebRTCMediaTransport struct {
 	closed       utils.AtomicBool
 	ctx          context.Context
 	cancel       context.CancelFunc
-	trackInfos   []*TrackInfo
+	md           *MediaDescription
 
 	videoPool *sync.Pool
 	audioPool *sync.Pool
@@ -76,9 +76,9 @@ type WebRTCMediaTransport struct {
 	requestKeyFrameHandler func() error
 }
 
-func NewWebRTCMediaTransport(trackInfos []*TrackInfo) *WebRTCMediaTransport {
+func NewWebRTCMediaTransport(md *MediaDescription) *WebRTCMediaTransport {
 	c := &WebRTCMediaTransport{
-		trackInfos:   trackInfos,
+		md:           md,
 		localTracks:  make(map[TrackType]*webrtc.TrackLocalStaticRTP),
 		remoteTracks: make(map[TrackType]*webrtc.TrackRemote),
 		sequencer:    newSequencer(MaxPacketTrack),
@@ -109,7 +109,7 @@ func (c *WebRTCMediaTransport) Init(umc UserAgentMediaConfig) error {
 	// Create a MediaEngine object to configure the supported codec
 	m := &webrtc.MediaEngine{}
 
-	for _, trackInfo := range c.trackInfos {
+	for _, trackInfo := range c.md.Tracks {
 		if trackInfo.TrackType == TrackTypeAudio {
 			for _, codec := range trackInfo.Codecs {
 				mimeType := fmt.Sprintf("audio/%s", codec.Name)
@@ -377,7 +377,7 @@ func (c *WebRTCMediaTransport) Close() error {
 
 func (c *WebRTCMediaTransport) AddLocalTracks() error {
 
-	for _, trackInfo := range c.trackInfos {
+	for _, trackInfo := range c.md.Tracks {
 
 		if trackInfo.TrackType == TrackTypeAudio {
 

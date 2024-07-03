@@ -425,7 +425,6 @@ func ParseTrackInfos(sdp *sdp.Session) ([]*TrackInfo, error) {
 	trackInfos := make([]*TrackInfo, 0)
 	for _, m := range sdp.Media {
 		trackInfo := &TrackInfo{}
-		trackInfo.Connection = sdp.Connection
 		trackInfo.Direction = m.Mode
 		trackInfo.Port = m.Port
 		if trackInfo.Port > 0 {

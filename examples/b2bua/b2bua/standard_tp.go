@@ -15,7 +15,7 @@ import (
 )
 
 type StandardMediaTransport struct {
-	trackInfos        []*TrackInfo
+	md                *MediaDescription
 	ports             map[TrackType]*UdpPort
 	localDescription  *sdp.Session
 	remoteDescription *sdp.Session
@@ -31,11 +31,11 @@ type StandardMediaTransport struct {
 	cancel    context.CancelFunc
 }
 
-func NewStandardMediaTransport(trackInfos []*TrackInfo) *StandardMediaTransport {
+func NewStandardMediaTransport(md *MediaDescription) *StandardMediaTransport {
 	t := &StandardMediaTransport{
-		trackInfos: trackInfos,
-		ports:      make(map[TrackType]*UdpPort),
-		videoSSRC:  0,
+		md:        md,
+		ports:     make(map[TrackType]*UdpPort),
+		videoSSRC: 0,
 	}
 
 	t.ctx, t.cancel = context.WithCancel(context.TODO())
@@ -70,13 +70,13 @@ func (c *StandardMediaTransport) Init(umc UserAgentMediaConfig) error {
 
 	var medias []*sdp.Media
 
-	for _, trackInfo := range c.trackInfos {
+	for _, trackInfo := range c.md.Tracks {
 
 		var rAddr *net.UDPAddr = nil
 		var rRtcpAddr *net.UDPAddr = nil
-		if trackInfo.Connection != nil {
-			rAddr, _ = net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", trackInfo.Connection.Address, trackInfo.Port))
-			rRtcpAddr, _ = net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", trackInfo.Connection.Address, trackInfo.RtcpPort))
+		if c.md.Connection != nil {
+			rAddr, _ = net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", c.md.Connection.Address, trackInfo.Port))
+			rRtcpAddr, _ = net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", c.md.Connection.Address, trackInfo.RtcpPort))
 		}
 
 		udpPort, err := NewUdpPort(trackInfo.TrackType, rAddr, rRtcpAddr, umc.ExternalRtpAddress)
@@ -176,19 +176,22 @@ func (c *StandardMediaTransport) onRtcpPacket(trackType TrackType, packet []byte
 
 func (c *StandardMediaTransport) WriteRTP(trackType TrackType, packet []byte) (int, error) {
 	logger.Debugf("UdpTansport::WriteRTP: %v, write %d bytes", trackType, len(packet))
-	/*
-		p := &rtp.Packet{}
-		if err := p.Unmarshal(packet); err != nil {
-			logger.Errorf("tp.Packet Unmarshal: e %v", err)
-		}
-		logger.Debugf("UdpTansport::WriteRTP: %v, write %d bytes, seq %d, ts %d", trackType, len(packet), p.SequenceNumber, p.Timestamp)
 
-		pktbuf, err := p.Marshal()
+	p := &rtp.Packet{}
+	if err := p.Unmarshal(packet); err != nil {
+		logger.Errorf("tp.Packet Unmarshal: e %v", err)
+	}
+	logger.Debugf("UdpTansport::WriteRTP: %v, write %d bytes, seq %d, ts %d", trackType, len(packet), p.SequenceNumber, p.Timestamp)
 
-		if err != nil {
-			logger.Errorf("UdpTansport::WriteRTP: Marshal rtp receiver packets err %v", err)
-		}
-	*/
+	payload := c.md.Tracks[trackType].Codecs[0].Payload
+
+	//re-write payload type
+	p.PayloadType = payload
+	pktbuf, err := p.Marshal()
+
+	if err != nil {
+		logger.Errorf("UdpTansport::WriteRTP: Marshal rtp receiver packets err %v", err)
+	}
 
 	port := c.ports[trackType]
 
@@ -197,7 +200,7 @@ func (c *StandardMediaTransport) WriteRTP(trackType TrackType, packet []byte) (i
 		return 0, nil
 	}
 
-	return port.WriteRtp(packet)
+	return port.WriteRtp(pktbuf)
 }
 
 func (c *StandardMediaTransport) WriteRTCP(trackType TrackType, packet []byte) (int, error) {
@@ -247,6 +250,7 @@ func (c *StandardMediaTransport) OnAnswer(answer *Desc) error {
 	if conn != nil {
 		logger.Debugf("remote connection address: %s", conn.Address)
 	}
+	c.md, _ = MediaDescriptionFrom(answer)
 	c.remoteDescription = sess
 	return nil
 }
