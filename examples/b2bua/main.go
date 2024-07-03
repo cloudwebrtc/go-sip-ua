@@ -89,9 +89,9 @@ func consoleLoop(b2bua *b2bua.B2BUA) {
 				fmt.Printf("No users\n")
 			}
 		case "originate":
-			fmt.Printf("Please enter the source user: ")
+			fmt.Printf("Enter the source user: ")
 			source := prompt.Input("Source> ", usersCompleter)
-			fmt.Printf("Please enter the destination user: ")
+			fmt.Printf("Enter the destination user: ")
 			destination := prompt.Input("Destination> ", usersCompleter)
 			b2bua.Originate(source, destination)
 		case "calls":
