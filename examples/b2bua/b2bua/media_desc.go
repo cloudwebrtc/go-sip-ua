@@ -39,6 +39,7 @@ type TrackInfo struct {
 	Port      int
 	RtcpPort  int
 	Ssrc      uint32
+	AS        uint32
 }
 
 func (t *TrackInfo) String() string {
@@ -46,8 +47,10 @@ func (t *TrackInfo) String() string {
 }
 
 type MediaDescription struct {
-	Tracks     map[TrackType]*TrackInfo
-	Connection *sdp.Connection
+	Tracks      map[TrackType]*TrackInfo
+	Connection  *sdp.Connection
+	SessionName string
+	EnablePS    bool
 }
 
 func MediaDescriptionFrom(sdp *Desc) (*MediaDescription, error) {
@@ -67,8 +70,10 @@ func ParseMediaDescription(sdp *sdp.Session) (*MediaDescription, error) {
 		return nil, errors.New("sdp is nil")
 	}
 	mediaDesc := &MediaDescription{
-		Connection: sdp.Connection,
-		Tracks:     make(map[TrackType]*TrackInfo),
+		Connection:  sdp.Connection,
+		SessionName: sdp.Name,
+		Tracks:      make(map[TrackType]*TrackInfo),
+		EnablePS:    false,
 	}
 	for _, m := range sdp.Media {
 		trackInfo := &TrackInfo{

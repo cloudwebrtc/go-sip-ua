@@ -97,6 +97,7 @@ func (b *Call) OnOffer(sdp *Desc) error {
 		logger.Errorf("OnOffer error: %v", err)
 		return err
 	}
+	logger.Debugf("OnOffer: %v", sdp.SDP)
 	return nil
 }
 
@@ -106,6 +107,7 @@ func (b *Call) CreateOffer() (*Desc, error) {
 		logger.Errorf("Offer error: %v", err)
 		return nil, err
 	}
+	logger.Debugf("CreateOffer: %v", offer.SDP)
 	return offer, nil
 }
 
@@ -115,7 +117,7 @@ func (b *Call) OnAnswer(sdp *Desc) error {
 		logger.Errorf("OnAnswer error: %v", err)
 		return err
 	}
-
+	logger.Debugf("OnAnswer: %v", sdp.SDP)
 	return nil
 }
 
@@ -125,5 +127,6 @@ func (b *Call) CreateAnswer() (*Desc, error) {
 		logger.Errorf("Answer error: %v", err)
 		return nil, err
 	}
+	logger.Debugf("CreateAnswer: %v", answer.SDP)
 	return answer, nil
 }

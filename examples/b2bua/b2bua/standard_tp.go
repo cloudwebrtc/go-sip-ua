@@ -61,7 +61,7 @@ func (c *StandardMediaTransport) Init(umc UserAgentMediaConfig) error {
 			SessionVersion: time.Now().UnixNano() / 1e6,
 		},
 		Timing: &sdp.Timing{Start: time.Time{}, Stop: time.Time{}},
-		//Name: "play", // Session Name ("s=")
+		Name:   c.md.SessionName,
 		Connection: &sdp.Connection{
 			Address: host,
 		},
@@ -69,9 +69,7 @@ func (c *StandardMediaTransport) Init(umc UserAgentMediaConfig) error {
 	}
 
 	var medias []*sdp.Media
-
 	for _, trackInfo := range c.md.Tracks {
-
 		var rAddr *net.UDPAddr = nil
 		var rRtcpAddr *net.UDPAddr = nil
 		if c.md.Connection != nil {
@@ -93,7 +91,7 @@ func (c *StandardMediaTransport) Init(umc UserAgentMediaConfig) error {
 		media.Port = udpPort.LocalPort()
 		media.Proto = "RTP/AVP"
 		media.Mode = trackInfo.Direction
-		media.Connection = []*sdp.Connection{{Address: host}}
+		//media.Connection = []*sdp.Connection{{Address: host}}
 		//Bandwidth: []*sdp.Bandwidth{{Type: "TIAS", Value: 96000}},
 
 		var formats []*sdp.Format

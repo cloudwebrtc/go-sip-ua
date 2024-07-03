@@ -63,7 +63,7 @@ var (
 )
 
 func init() {
-	logger = utils.NewLogrusLogger(utils.DefaultLogLevel, "B2BUA", nil)
+	logger = utils.NewLogrusLogger(log.DebugLevel, "B2BUA", nil)
 	b2buaConfig = &B2BUAConfig{
 		UserAgent:       "Go B2BUA/1.0.0",
 		DisableAuth:     false,

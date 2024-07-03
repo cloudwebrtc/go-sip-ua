@@ -301,9 +301,39 @@ func (s *CallService) Originate(source string, destination string) error {
 			Address: host,
 		},
 	}
+
 	var err2 error = nil
 	if contacts, found := s.registry.GetContacts(srcUri); found {
 		for _, instance := range *contacts {
+			md.EnablePS = true
+			md.SessionName = "Play"
+			md.Tracks = map[TrackType]*TrackInfo{
+				TrackTypeAudio: {TrackType: TrackTypeAudio, Direction: "recvonly", Codecs: []*sdp.Format{
+					{
+						Payload:   0,
+						Name:      "PCMU",
+						ClockRate: 8000,
+					},
+					{
+						Payload:   8,
+						Name:      "PCMA",
+						ClockRate: 8000,
+					},
+				}},
+				TrackTypeVideo: {TrackType: TrackTypeVideo, Direction: "recvonly", Codecs: []*sdp.Format{
+					{
+						Payload:   96,
+						Name:      "PS",
+						ClockRate: 90000,
+					},
+					{
+						Payload:   98,
+						Name:      "H264",
+						ClockRate: 90000,
+					},
+				}},
+			}
+
 			srcCall, err2 = s.makeOutgoingCall(srcUri, displayName, destUri, instance, md)
 			if err != nil {
 				logger.Errorf("Originate error: %v", err)
@@ -314,6 +344,8 @@ func (s *CallService) Originate(source string, destination string) error {
 
 	if contacts, found := s.registry.GetContacts(destUri); found {
 		for _, instance := range *contacts {
+			md.EnablePS = false
+			md.SessionName = "Talk"
 			destCall, err2 = s.makeOutgoingCall(destUri, displayName, srcUri, instance, md)
 			if err != nil {
 				logger.Errorf("Originate error: %v", err)
@@ -322,7 +354,12 @@ func (s *CallService) Originate(source string, destination string) error {
 		}
 	}
 
-	s.StoreBridgedCall(srcCall, destCall, OriginateCall)
-	BridgeMediaStream(srcCall.mediaTransport, destCall.mediaTransport)
+	if srcCall != nil && destCall != nil {
+		s.StoreBridgedCall(srcCall, destCall, OriginateCall)
+		BridgeMediaStream(srcCall.mediaTransport, destCall.mediaTransport)
+	} else {
+		logger.Errorf("Originate error: %v", err2)
+		return err2
+	}
 	return nil
 }
