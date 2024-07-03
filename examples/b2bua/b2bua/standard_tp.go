@@ -94,6 +94,11 @@ func (c *StandardMediaTransport) Init(umc UserAgentMediaConfig) error {
 		//media.Connection = []*sdp.Connection{{Address: host}}
 		//Bandwidth: []*sdp.Bandwidth{{Type: "TIAS", Value: 96000}},
 
+		if trackInfo.TrackType == TrackTypeVideo && c.md.EnablePS {
+			media.Bandwidth = []*sdp.Bandwidth{{Type: "AS", Value: 2048}}
+			media.Attributes = append(media.Attributes, &sdp.Attr{Name: "y", Value: "0101014321"})
+		}
+
 		var formats []*sdp.Format
 		for _, codec := range trackInfo.Codecs {
 			//for _, enabledCodec := range callConfig.Codecs {
