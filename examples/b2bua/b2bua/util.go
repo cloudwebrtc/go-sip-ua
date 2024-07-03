@@ -378,20 +378,24 @@ a=rtpmap:110 telephone-event/48000
 a=rtpmap:126 telephone-event/8000
 */
 
-var formatMaps = map[uint8]*sdp.Format{
+var defaultAudioCodecs = map[uint8]*sdp.Format{
 	0:   {Payload: 0, Name: "PCMU", ClockRate: 8000},
 	8:   {Payload: 8, Name: "PCMA", ClockRate: 8000},
 	9:   {Payload: 9, Name: "G722", ClockRate: 8000},
 	13:  {Payload: 13, Name: "CN", ClockRate: 8000},
-	63:  {Payload: 63, Name: "red", ClockRate: 8000},
 	110: {Payload: 110, Name: "telephone-event", ClockRate: 48000},
 	111: {Payload: 111, Name: "opus", ClockRate: 48000},
 	126: {Payload: 126, Name: "telephone-event", ClockRate: 8000},
 }
 
+var defaultVideoCodecs = map[uint8]*sdp.Format{
+	96: {Payload: 96, Name: "VP8", ClockRate: 90000},
+	97: {Payload: 97, Name: "H264", ClockRate: 90000},
+}
+
 func fixFormatName(fmts []*sdp.Format) []*sdp.Format {
 	for _, f := range fmts {
-		if ff, ok := formatMaps[f.Payload]; ok && f.Name == "" {
+		if ff, ok := defaultAudioCodecs[f.Payload]; ok && f.Name == "" {
 			f.Name = ff.Name
 			if f.ClockRate == 0 {
 				f.ClockRate = ff.ClockRate

@@ -105,7 +105,7 @@ func (c *WebRTCMediaTransport) Type() MediaTransportType {
 	return TransportTypeWebRTC
 }
 
-func (c *WebRTCMediaTransport) Init(callConfig CallConfig) error {
+func (c *WebRTCMediaTransport) Init(umc UserAgentMediaConfig) error {
 	// Create a MediaEngine object to configure the supported codec
 	m := &webrtc.MediaEngine{}
 

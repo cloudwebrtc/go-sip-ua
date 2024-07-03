@@ -10,6 +10,10 @@ const (
 	Record        BridgeType = "Record"
 )
 
+func (b BridgeType) String() string {
+	return string(b)
+}
+
 type CallBridge struct {
 	src   *Call
 	dest  *Call
@@ -29,8 +33,24 @@ func (b *CallBridge) SetState(state CallState) {
 	b.state = state
 }
 
+func (b *CallBridge) Src() *Call {
+	return b.src
+}
+
+func (b *CallBridge) Dest() *Call {
+	return b.dest
+}
+
+func (b *CallBridge) Type() BridgeType {
+	return b.bType
+}
+
 func (b *CallBridge) ToString() string {
-	return b.src.ToString() + " -> " + b.dest.ToString()
+	str := b.Type().String() + ": [" + b.src.ToString() + " -> " + b.dest.ToString() + "]\n"
+	str = str + "State: " + b.State().String() + "\n"
+	str = str + "Src: " + b.src.MediaInfo() + "\n"
+	str = str + "Dest: " + b.dest.MediaInfo()
+	return str
 }
 
 func (b *CallBridge) Terminate(call *Call) {

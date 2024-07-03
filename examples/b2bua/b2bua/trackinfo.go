@@ -1,6 +1,10 @@
 package b2bua
 
-import "github.com/pixelbender/go-sdp/sdp"
+import (
+	"fmt"
+
+	"github.com/pixelbender/go-sdp/sdp"
+)
 
 type TrackType string
 
@@ -9,6 +13,10 @@ const (
 	TrackTypeVideo TrackType = "video"
 )
 
+func (t TrackType) String() string {
+	return string(t)
+}
+
 type TrackInfo struct {
 	TrackType  TrackType
 	Codecs     []*sdp.Format
@@ -16,4 +24,8 @@ type TrackInfo struct {
 	Direction  string
 	Port       int
 	RtcpPort   int
+}
+
+func (t *TrackInfo) String() string {
+	return t.TrackType.String() + ": " + t.Codecs[0].Name + "/" + fmt.Sprintf("%d", t.Codecs[0].ClockRate) + ", pt: " + fmt.Sprintf("%d", t.Codecs[0].Payload)
 }

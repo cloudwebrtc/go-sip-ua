@@ -7,8 +7,12 @@ const (
 	TransportTypeWebRTC   MediaTransportType = "WebRTC-SAVPF/DTLS/SRTP"
 )
 
+func (t MediaTransportType) String() string {
+	return string(t)
+}
+
 type MediaTransport interface {
-	Init(config CallConfig) error
+	Init(umc UserAgentMediaConfig) error
 	Close() error
 	CreateOffer() (*Desc, error)
 	OnAnswer(desc *Desc) error

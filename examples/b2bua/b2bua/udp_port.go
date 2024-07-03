@@ -41,20 +41,31 @@ func (c *UdpPort) Init() error {
 	lRtcpAddr := &net.UDPAddr{IP: net.ParseIP("0.0.0.0"), Port: 0}
 
 	// TODO: set port range from config
-	rtpConns, err := ListenRTPInPortRange(4000, 5000, "udp", lAddr, lRtcpAddr)
+	udpPortRangeMin := 4000
+	udpPortRangeMax := 5000
+
+	if b2buaConfig.UdpPortRange[0] != 0 {
+		udpPortRangeMin = b2buaConfig.UdpPortRange[0]
+	}
+
+	if b2buaConfig.UdpPortRange[1] != 0 {
+		udpPortRangeMax = b2buaConfig.UdpPortRange[1]
+	}
+
+	rtpConns, err := ListenRTPInPortRange(udpPortRangeMin, udpPortRangeMax, "udp", lAddr, lRtcpAddr)
 	if err != nil {
 		logger.Errorf("ListenUDP: err => %v", err)
 		return err
 	}
 
-	host := callConfig.ExternalRtpAddress
+	host := b2buaConfig.UaMediaConfig.ExternalRtpAddress
 	if host == "" || host == "0.0.0.0" {
 		if v, err := util.ResolveSelfIP(); err == nil {
 			host = v.String()
 		}
 	}
 
-	logger.Infof("[%s] ListenUDP: udp://%s:%v, udp://%s:%v", c.trackType, host, rtpConns[0].LocalAddr().(*net.UDPAddr).Port, host, rtpConns[1].LocalAddr().(*net.UDPAddr).Port)
+	logger.Infof("[%s] ListenUDP: RTP => udp://%s:%v, RTCP => udp://%s:%v", c.trackType, host, rtpConns[0].LocalAddr().(*net.UDPAddr).Port, host, rtpConns[1].LocalAddr().(*net.UDPAddr).Port)
 
 	go c.loop(rtpConns[0], func(packet []byte, raddr net.Addr) {
 		c.mutex.Lock()

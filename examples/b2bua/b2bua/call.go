@@ -2,6 +2,7 @@ package b2bua
 
 import (
 	"github.com/cloudwebrtc/go-sip-ua/pkg/session"
+	"github.com/ghettovoice/gosip/sip"
 	"github.com/pixelbender/go-sdp/sdp"
 )
 
@@ -16,6 +17,10 @@ const (
 	Failure    CallState = "Failure"
 	Terminated CallState = "Terminated"
 )
+
+func (s CallState) String() string {
+	return string(s)
+}
 
 type Desc struct {
 	Type string `json:"type"`
@@ -49,7 +54,7 @@ func (b *Call) Init(transType MediaTransportType, trackInfos []*TrackInfo) {
 		b.mediaTransport = NewStandardMediaTransport(trackInfos)
 	}
 
-	b.mediaTransport.Init(callConfig)
+	b.mediaTransport.Init(b2buaConfig.UaMediaConfig)
 }
 
 func (b *Call) Id() string {
@@ -58,6 +63,22 @@ func (b *Call) Id() string {
 
 func (b *Call) ToString() string {
 	return (b.sess.CallID()).String() + ", uri: " + b.sess.Contact()
+}
+
+func (b *Call) MediaInfo() string {
+	info := "[" + b.mediaTransport.Type().String() + "]"
+	for _, trackInfo := range b.originalTrackInfos {
+		info += trackInfo.String() + " "
+	}
+	return info
+}
+
+func (b *Call) Provisional(statusCode sip.StatusCode, reason string) {
+	b.sess.Provisional(statusCode, reason)
+}
+
+func (b *Call) Reject(statusCode sip.StatusCode, reason string) {
+	b.sess.Reject(statusCode, reason)
 }
 
 func (b *Call) Accept(answer string) {

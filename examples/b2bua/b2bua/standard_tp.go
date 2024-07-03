@@ -43,9 +43,9 @@ func NewStandardMediaTransport(trackInfos []*TrackInfo) *StandardMediaTransport 
 	return t
 }
 
-func (c *StandardMediaTransport) Init(config CallConfig) error {
+func (c *StandardMediaTransport) Init(umc UserAgentMediaConfig) error {
 
-	host := callConfig.ExternalRtpAddress
+	host := b2buaConfig.UaMediaConfig.ExternalRtpAddress
 
 	if host == "" || host == "0.0.0.0" {
 		if v, err := util.ResolveSelfIP(); err == nil {
@@ -79,7 +79,7 @@ func (c *StandardMediaTransport) Init(config CallConfig) error {
 			rRtcpAddr, _ = net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", trackInfo.Connection.Address, trackInfo.RtcpPort))
 		}
 
-		udpPort, err := NewUdpPort(trackInfo.TrackType, rAddr, rRtcpAddr, config.ExternalRtpAddress)
+		udpPort, err := NewUdpPort(trackInfo.TrackType, rAddr, rRtcpAddr, umc.ExternalRtpAddress)
 		if err != nil {
 			return err
 		}
@@ -156,7 +156,7 @@ func (c *StandardMediaTransport) onRtpPacket(trackType TrackType, packet []byte,
 	defer c.mu.RUnlock()
 	if c.rtpHandler != nil {
 		if _, err := c.rtpHandler(trackType, packet); err != nil {
-			logger.Errorf("UdpTansport::onRtpPacket: panic => %v", err)
+			logger.Warnf("UdpTansport::onRtpPacket: panic => %v", err)
 		}
 	}
 	return nil
@@ -168,13 +168,14 @@ func (c *StandardMediaTransport) onRtcpPacket(trackType TrackType, packet []byte
 	defer c.mu.RUnlock()
 	if c.rtcpHandler != nil {
 		if _, err := c.rtcpHandler(trackType, packet); err != nil {
-			logger.Errorf("UdpTansport::onRtcpPacket: panic => %v", err)
+			logger.Warnf("UdpTansport::onRtcpPacket: panic => %v", err)
 		}
 	}
 	return nil
 }
 
 func (c *StandardMediaTransport) WriteRTP(trackType TrackType, packet []byte) (int, error) {
+	logger.Debugf("UdpTansport::WriteRTP: %v, write %d bytes", trackType, len(packet))
 	/*
 		p := &rtp.Packet{}
 		if err := p.Unmarshal(packet); err != nil {
@@ -200,6 +201,7 @@ func (c *StandardMediaTransport) WriteRTP(trackType TrackType, packet []byte) (i
 }
 
 func (c *StandardMediaTransport) WriteRTCP(trackType TrackType, packet []byte) (int, error) {
+	logger.Debugf("UdpTansport::WriteRTCP: %v, write %d bytes", trackType, len(packet))
 	/*
 		pkts, err := rtcp.Unmarshal(packet)
 		if err != nil {
