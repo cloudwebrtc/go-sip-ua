@@ -6,7 +6,7 @@ require (
 	firebase.google.com/go v3.13.0+incompatible
 	github.com/c-bata/go-prompt v0.2.6
 	github.com/gammazero/deque v0.1.0
-	github.com/ghettovoice/gosip v0.0.0-20230322091832-d77de1c97f89
+	github.com/ghettovoice/gosip v0.0.0-20240619135023-afc3f006312f
 	github.com/go-logr/logr v1.2.4
 	github.com/google/uuid v1.3.0
 	github.com/pion/interceptor v0.1.12

@@ -695,8 +695,8 @@ github.com/fullstorydev/grpcurl v1.8.0/go.mod h1:Mn2jWbdMrQGJQ8UD62uNyMumT2acsZU
 github.com/gammazero/deque v0.1.0 h1:f9LnNmq66VDeuAlSAapemq/U7hJ2jpIWa4c09q8Dlik=
 github.com/gammazero/deque v0.1.0/go.mod h1:KQw7vFau1hHuM8xmI9RbgKFbAsQFWmBpqQ2KenFLk6M=
 github.com/gammazero/workerpool v1.1.2/go.mod h1:UelbXcO0zCIGFcufcirHhq2/xtLXJdQ29qZNlXG9OjQ=
-github.com/ghettovoice/gosip v0.0.0-20230322091832-d77de1c97f89 h1:bUtgAwa7cfrp0bEnlfr+k6fgsfn7/OFQ0pvQvoujOAo=
-github.com/ghettovoice/gosip v0.0.0-20230322091832-d77de1c97f89/go.mod h1:rlD1yLOErWYohWTryG/2bTTpmzB79p52ntLA/uIFXeI=
+github.com/ghettovoice/gosip v0.0.0-20240619135023-afc3f006312f h1:U7o+nojFRcazerHWksrQ584QCA5DEqv0Pls4/cMFzuA=
+github.com/ghettovoice/gosip v0.0.0-20240619135023-afc3f006312f/go.mod h1:rlD1yLOErWYohWTryG/2bTTpmzB79p52ntLA/uIFXeI=
 github.com/ghodss/yaml v1.0.0/go.mod h1:4dBDuWmgqj2HViK6kFavaiC9ZROes6MMH2rRYeMEF04=
 github.com/gin-contrib/sse v0.1.0/go.mod h1:RHrZQHXnP2xjPF+u1gW/2HnVO7nvIa9PG3Gm+fLHvGI=
 github.com/gin-gonic/gin v1.6.3/go.mod h1:75u5sXoLsGZoRN5Sgbi1eraJ4GU3++wFwWzhwvtwp4M=
