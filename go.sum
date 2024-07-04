@@ -1168,8 +1168,8 @@ github.com/pion/udp/v2 v2.0.1/go.mod h1:B7uvTMP00lzWdyMr/1PVZXtV3wpPIxBRd4Wl6Aks
 github.com/pion/webrtc/v3 v3.1.7/go.mod h1:SQxttydYlKo2rCQjHzkUCJFAfEO/Oh2efMWbKYXLk98=
 github.com/pion/webrtc/v3 v3.1.59 h1:B3YFo8q6dwBYKA2LUjWRChP59Qtt+xvv1Ul7UPDp6Zc=
 github.com/pion/webrtc/v3 v3.1.59/go.mod h1:rJGgStRoFyFOWJULHLayaimsG+jIEoenhJ5MB5gIFqw=
-github.com/pixelbender/go-sdp v1.1.0 h1:rkm9aFBNKrnB+YGfhLmAkal3pC8XYXb9h+172PlrCBU=
-github.com/pixelbender/go-sdp v1.1.0/go.mod h1:6IBlz9+BrUHoFTea7gcp4S54khtOhjCW/nVDLhmZBAs=
+github.com/pixelbender/go-sdp v1.1.1-0.20240403132153-9683c2a0405f h1:2olHyEeX4G9ZN6LZ8Y6jvDn7uHJQUbsEgCwsZEh7K30=
+github.com/pixelbender/go-sdp v1.1.1-0.20240403132153-9683c2a0405f/go.mod h1:6IBlz9+BrUHoFTea7gcp4S54khtOhjCW/nVDLhmZBAs=
 github.com/pkg/diff v0.0.0-20210226163009-20ebb0f2a09e/go.mod h1:pJLUxLENpZxwdsKMEsNbx1VGcRFpLqf3715MtcvvzbA=
 github.com/pkg/errors v0.8.0/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
 github.com/pkg/errors v0.8.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
