@@ -259,12 +259,20 @@ func (s *CallService) Originate(source string, destination string) error {
 
 	displayName := "Originate"
 
-	srcUri, err := parser.ParseUri("sip:" + source + "@127.0.0.1")
+	host := b2buaConfig.UaMediaConfig.ExternalRtpAddress
+
+	if host == "" || host == "0.0.0.0" {
+		if v, err := util.ResolveSelfIP(); err == nil {
+			host = v.String()
+		}
+	}
+
+	srcUri, err := parser.ParseUri("sip:" + source + "@" + host)
 	if err != nil {
 		logger.Error(err)
 	}
 
-	destUri, err := parser.ParseUri("sip:" + destination + "@127.0.0.1")
+	destUri, err := parser.ParseUri("sip:" + destination + "@" + host)
 	if err != nil {
 		logger.Error(err)
 	}
@@ -286,13 +294,6 @@ func (s *CallService) Originate(source string, destination string) error {
 	originalTrackInfos := map[TrackType]*TrackInfo{
 		TrackTypeAudio: {TrackType: TrackTypeAudio, Direction: "sendrecv", Codecs: audioCodecs},
 		TrackTypeVideo: {TrackType: TrackTypeVideo, Direction: "sendrecv", Codecs: videoCodecs},
-	}
-
-	host := b2buaConfig.UaMediaConfig.ExternalRtpAddress
-	if host == "" || host == "0.0.0.0" {
-		if v, err := util.ResolveSelfIP(); err == nil {
-			host = v.String()
-		}
 	}
 
 	md := &MediaDescription{

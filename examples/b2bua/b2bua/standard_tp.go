@@ -186,21 +186,24 @@ func (c *StandardMediaTransport) WriteRTP(trackType TrackType, packet []byte) (i
 	}
 	logger.Debugf("UdpTansport::WriteRTP: %v, write %d bytes, seq %d, ts %d", trackType, len(packet), p.SequenceNumber, p.Timestamp)
 
-	payload := c.md.Tracks[trackType].Codecs[0].Payload
-
-	//re-write payload type
-	p.PayloadType = payload
-	pktbuf, err := p.Marshal()
-
-	if err != nil {
-		logger.Errorf("UdpTansport::WriteRTP: Marshal rtp receiver packets err %v", err)
-	}
-
 	port := c.ports[trackType]
 
 	if port == nil {
 		logger.Errorf("UdpTansport::WriteRTP: port is nil")
 		return 0, nil
+	}
+
+	track, found := c.md.Tracks[trackType]
+	if !found {
+		return 0, fmt.Errorf("track %v not found", trackType)
+	}
+
+	//re-write payload type
+	p.PayloadType = track.Codecs[0].Payload
+	pktbuf, err := p.Marshal()
+
+	if err != nil {
+		logger.Errorf("UdpTansport::WriteRTP: Marshal rtp receiver packets err %v", err)
 	}
 
 	return port.WriteRtp(pktbuf)

@@ -21,6 +21,24 @@ func (d *Desc) FromSdpSession(sess *sdp.Session) error {
 	return nil
 }
 
+type TransportType string
+
+const (
+	MediaTransportUDP  TransportType = "UDP"
+	MediaTransportTCP  TransportType = "TCP"
+	MediaTransportTLS  TransportType = "TLS"
+	MediaTransportDTLS TransportType = "DTLS"
+)
+
+type MediaStreamDir string
+
+const (
+	MediaStreamSendRecv MediaStreamDir = "sendrecv"
+	MediaStreamSendOnly MediaStreamDir = "sendonly"
+	MediaStreamRecvOnly MediaStreamDir = "recvonly"
+	MediaStreamInactive MediaStreamDir = "inactive"
+)
+
 type TrackType string
 
 const (

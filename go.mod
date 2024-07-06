@@ -6,7 +6,7 @@ require (
 	firebase.google.com/go v3.13.0+incompatible
 	github.com/c-bata/go-prompt v0.2.6
 	github.com/gammazero/deque v0.1.0
-	github.com/ghettovoice/gosip v0.0.0-20230322091832-d77de1c97f89
+	github.com/ghettovoice/gosip v0.0.0-20240619135023-afc3f006312f
 	github.com/go-logr/logr v1.2.4
 	github.com/google/uuid v1.3.0
 	github.com/pion/interceptor v0.1.12
@@ -16,7 +16,7 @@ require (
 	github.com/pion/sdp/v3 v3.0.6
 	github.com/pion/transport v0.14.1
 	github.com/pion/webrtc/v3 v3.1.59
-	github.com/pixelbender/go-sdp v1.1.0
+	github.com/pixelbender/go-sdp v1.1.1-0.20240403132153-9683c2a0405f
 	github.com/sirupsen/logrus v1.9.0
 	github.com/stretchr/testify v1.8.2
 	github.com/tevino/abool v1.2.0
