@@ -296,13 +296,6 @@ func (s *CallService) Originate(source string, destination string) error {
 		TrackTypeVideo: {TrackType: TrackTypeVideo, Direction: "sendrecv", Codecs: videoCodecs},
 	}
 
-	host := b2buaConfig.UaMediaConfig.ExternalRtpAddress
-	if host == "" || host == "0.0.0.0" {
-		if v, err := util.ResolveSelfIP(); err == nil {
-			host = v.String()
-		}
-	}
-
 	md := &MediaDescription{
 		Tracks: originalTrackInfos,
 		Connection: &sdp.Connection{
