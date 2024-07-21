@@ -25,11 +25,15 @@ var (
 )
 
 const (
-	mimeTypeH264 = "video/h264"
+	mimeTypeH264 = "video/H264"
 	mimeTypeOpus = "audio/opus"
-	mimeTypeVP8  = "video/vp8"
-	mimeTypeVP9  = "video/vp9"
+	mimeTypeVP8  = "video/VP8"
+	mimeTypeVP9  = "video/VP9"
+	mimeTypeAV1  = "audio/AV1"
 	mineTypePCMA = "audio/PCMA"
+	mineTypePCMU = "audio/PCMU"
+	mimeTypeG722 = "audio/G722"
+	mimeTypeILBC = "audio/ILBC"
 )
 
 func init() {
@@ -108,69 +112,22 @@ func (c *WebRTCMediaTransport) Type() MediaTransportType {
 func (c *WebRTCMediaTransport) Init(umc UserAgentMediaConfig) error {
 	// Create a MediaEngine object to configure the supported codec
 	m := &webrtc.MediaEngine{}
-	/*
-		for _, trackInfo := range c.md.Tracks {
-			if trackInfo.TrackType == TrackTypeAudio {
-				for _, codec := range trackInfo.Codecs {
-					mimeType := fmt.Sprintf("audio/%s", codec.Name)
-					sdpFmtpLine := strings.Join(codec.Params, ";")
-					var rtcpFb []webrtc.RTCPFeedback = nil
-					for _, fb := range codec.Feedback {
-						vals := strings.Split(fb, " ")
-						if len(vals) < 2 {
-							rtcpFb = append(rtcpFb, webrtc.RTCPFeedback{Type: vals[0], Parameter: ""})
-						} else {
-							rtcpFb = append(rtcpFb, webrtc.RTCPFeedback{Type: vals[0], Parameter: vals[1]})
-						}
-					}
-					if err := m.RegisterCodec(webrtc.RTPCodecParameters{
-						RTPCodecCapability: webrtc.RTPCodecCapability{
-							MimeType:     mimeType,
-							ClockRate:    uint32(codec.ClockRate),
-							Channels:     uint16(codec.Channels),
-							SDPFmtpLine:  sdpFmtpLine,
-							RTCPFeedback: rtcpFb},
-						PayloadType: webrtc.PayloadType(codec.Payload),
-					}, webrtc.RTPCodecTypeAudio); err != nil {
-						return err
-					}
-				}
-			} else if trackInfo.TrackType == TrackTypeVideo {
-				for _, codec := range trackInfo.Codecs {
-					mimeType := fmt.Sprintf("video/%s", codec.Name)
-					sdpFmtpLine := strings.Join(codec.Params, ";")
-					var rtcpFb []webrtc.RTCPFeedback = nil
-					for _, fb := range codec.Feedback {
-						vals := strings.Split(fb, " ")
-						if len(vals) < 2 {
-							rtcpFb = append(rtcpFb, webrtc.RTCPFeedback{Type: vals[0], Parameter: ""})
-						} else {
-							rtcpFb = append(rtcpFb, webrtc.RTCPFeedback{Type: vals[0], Parameter: vals[1]})
-						}
-					}
-					if err := m.RegisterCodec(webrtc.RTPCodecParameters{
-						RTPCodecCapability: webrtc.RTPCodecCapability{
-							MimeType:     mimeType,
-							ClockRate:    uint32(codec.ClockRate),
-							SDPFmtpLine:  sdpFmtpLine,
-							RTCPFeedback: rtcpFb},
-						PayloadType: webrtc.PayloadType(codec.Payload),
-					}, webrtc.RTPCodecTypeVideo); err != nil {
-						return err
-					}
-				}
-			}
-		}
-	*/
-
 	for _, codec := range []webrtc.RTPCodecParameters{
 		{
-			RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypePCMU, ClockRate: 8000, Channels: 1, SDPFmtpLine: "", RTCPFeedback: nil},
+			RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: mineTypePCMU, ClockRate: 8000, Channels: 1, SDPFmtpLine: "", RTCPFeedback: nil},
 			PayloadType:        0,
 		},
 		{
-			RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypePCMA, ClockRate: 8000, Channels: 1, SDPFmtpLine: "", RTCPFeedback: nil},
+			RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: mineTypePCMA, ClockRate: 8000, Channels: 1, SDPFmtpLine: "", RTCPFeedback: nil},
 			PayloadType:        8,
+		},
+		{
+			RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: mimeTypeG722, ClockRate: 8000, Channels: 1, SDPFmtpLine: "", RTCPFeedback: nil},
+			PayloadType:        9,
+		},
+		{
+			RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: mimeTypeILBC, ClockRate: 8000, Channels: 1, SDPFmtpLine: "", RTCPFeedback: nil},
+			PayloadType:        103,
 		},
 		{
 			RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: mimeTypeOpus, ClockRate: 48000, Channels: 2, SDPFmtpLine: "minptime=10;useinbandfec=1", RTCPFeedback: nil},
@@ -181,7 +138,7 @@ func (c *WebRTCMediaTransport) Init(umc UserAgentMediaConfig) error {
 			if trackInfo.TrackType == TrackTypeAudio {
 				for _, c := range trackInfo.Codecs {
 					if strings.Contains(strings.ToLower(codec.RTPCodecCapability.MimeType), strings.ToLower(c.Name)) {
-						codec.PayloadType = webrtc.PayloadType(c.Payload)
+						//codec.PayloadType = webrtc.PayloadType(c.Payload)
 						if err := m.RegisterCodec(codec, webrtc.RTPCodecTypeAudio); err != nil {
 							return err
 						}
@@ -199,6 +156,14 @@ func (c *WebRTCMediaTransport) Init(umc UserAgentMediaConfig) error {
 			PayloadType:        100,
 		},
 		{
+			RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: mimeTypeVP9, ClockRate: 90000, RTCPFeedback: videoRTCPFeedback},
+			PayloadType:        127,
+		},
+		{
+			RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: mimeTypeAV1, ClockRate: 90000, RTCPFeedback: videoRTCPFeedback},
+			PayloadType:        35,
+		},
+		{
 			RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: mimeTypeH264, ClockRate: 90000, SDPFmtpLine: "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=640c33", RTCPFeedback: videoRTCPFeedback},
 			PayloadType:        96,
 		},
@@ -207,7 +172,7 @@ func (c *WebRTCMediaTransport) Init(umc UserAgentMediaConfig) error {
 			if trackInfo.TrackType == TrackTypeVideo {
 				for _, c := range trackInfo.Codecs {
 					if strings.Contains(strings.ToLower(codec.RTPCodecCapability.MimeType), strings.ToLower(c.Name)) {
-						codec.PayloadType = webrtc.PayloadType(c.Payload)
+						//codec.PayloadType = webrtc.PayloadType(c.Payload)
 						if err := m.RegisterCodec(codec, webrtc.RTPCodecTypeVideo); err != nil {
 							return err
 						}
