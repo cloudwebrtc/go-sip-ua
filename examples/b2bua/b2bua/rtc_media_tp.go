@@ -26,7 +26,7 @@ var (
 
 const (
 	mimeTypeH264 = "video/H264"
-	mimeTypeOpus = "audio/opus"
+	mimeTypeOpus = "audio/OPUS"
 	mimeTypeVP8  = "video/VP8"
 	mimeTypeVP9  = "video/VP9"
 	mimeTypeAV1  = "audio/AV1"
