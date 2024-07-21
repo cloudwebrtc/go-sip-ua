@@ -145,6 +145,14 @@ func (c *StandardMediaTransport) onRtpPacket(trackType TrackType, packet []byte,
 		//c.sendPLI(c.videoSSRC)
 	}
 
+	/*
+		track, found := c.md.Tracks[TrackTypeVideo]
+		if found && len(track.Codecs) > 0 && strings.ToUpper(track.Codecs[0].Name) == "PS" {
+
+			return nil
+		}
+	*/
+
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	if c.rtpHandler != nil {
