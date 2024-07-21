@@ -379,13 +379,13 @@ a=rtpmap:126 telephone-event/8000
 */
 
 var defaultAudioCodecs = map[uint8]*sdp.Format{
-	0:   {Payload: 0, Name: "PCMU", ClockRate: 8000},
-	8:   {Payload: 8, Name: "PCMA", ClockRate: 8000},
-	9:   {Payload: 9, Name: "G722", ClockRate: 8000},
-	13:  {Payload: 13, Name: "CN", ClockRate: 8000},
-	110: {Payload: 110, Name: "telephone-event", ClockRate: 48000},
-	111: {Payload: 111, Name: "opus", ClockRate: 48000},
-	126: {Payload: 126, Name: "telephone-event", ClockRate: 8000},
+	0:   {Payload: 0, Name: "PCMU", ClockRate: 8000, Channels: 1},
+	8:   {Payload: 8, Name: "PCMA", ClockRate: 8000, Channels: 1},
+	9:   {Payload: 9, Name: "G722", ClockRate: 8000, Channels: 1},
+	13:  {Payload: 13, Name: "CN", ClockRate: 8000, Channels: 1},
+	110: {Payload: 110, Name: "telephone-event", ClockRate: 48000, Channels: 1},
+	111: {Payload: 111, Name: "opus", ClockRate: 48000, Channels: 1},
+	126: {Payload: 126, Name: "telephone-event", ClockRate: 8000, Channels: 1},
 }
 
 var defaultVideoCodecs = map[uint8]*sdp.Format{

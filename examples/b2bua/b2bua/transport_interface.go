@@ -1,5 +1,10 @@
 package b2bua
 
+import (
+	"github.com/pion/rtcp"
+	"github.com/pion/rtp"
+)
+
 type MediaTransportType string
 
 const (
@@ -20,13 +25,13 @@ type MediaTransport interface {
 	CreateAnswer() (*Desc, error)
 	Type() MediaTransportType
 
-	OnRtpPacket(rtpHandler func(trackType TrackType, payload []byte) (int, error))
-	OnRtcpPacket(rtcpHandler func(trackType TrackType, payload []byte) (int, error))
+	OnRtpPacket(rtpHandler func(trackType TrackType, pkt rtp.Packet) (int, error))
+	OnRtcpPacket(rtcpHandler func(trackType TrackType, pkt rtcp.Packet) (int, error))
 
 	OnRequestKeyFrame(func() error)
 
-	WriteRTP(trackType TrackType, payload []byte) (int, error)
-	WriteRTCP(trackType TrackType, payload []byte) (int, error)
+	WriteRTP(trackType TrackType, pkt rtp.Packet) (int, error)
+	WriteRTCP(trackType TrackType, pkt rtcp.Packet) (int, error)
 
 	RequestKeyFrame() error
 }

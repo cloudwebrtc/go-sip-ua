@@ -21,8 +21,8 @@ type StandardMediaTransport struct {
 	remoteDescription *sdp.Session
 
 	mu                     sync.RWMutex
-	rtpHandler             func(trackType TrackType, payload []byte) (int, error)
-	rtcpHandler            func(trackType TrackType, payload []byte) (int, error)
+	rtpHandler             func(trackType TrackType, pkt rtp.Packet) (int, error)
+	rtcpHandler            func(trackType TrackType, pkt rtcp.Packet) (int, error)
 	requestKeyFrameHandler func() error
 
 	videoSSRC uint32
@@ -98,18 +98,11 @@ func (c *StandardMediaTransport) Init(umc UserAgentMediaConfig) error {
 
 		var formats []*sdp.Format
 		for _, codec := range trackInfo.Codecs {
-			//for _, enabledCodec := range callConfig.Codecs {
-			//	if codec.Name == enabledCodec {
-			formats = append(formats, &sdp.Format{
-				Payload:   codec.Payload,
-				Name:      codec.Name,
-				ClockRate: codec.ClockRate,
-				Params:    codec.Params,
-				Feedback:  codec.Feedback,
-				Channels:  codec.Channels,
-			})
-			//	}
-			//}
+			for _, enabledCodec := range b2buaConfig.UaMediaConfig.Codecs {
+				if codec.Name == enabledCodec {
+					formats = append(formats, codec)
+				}
+			}
 		}
 		media.Format = formats
 		medias = append(medias, media)
@@ -119,13 +112,13 @@ func (c *StandardMediaTransport) Init(umc UserAgentMediaConfig) error {
 	return nil
 }
 
-func (c *StandardMediaTransport) OnRtpPacket(rtpHandler func(trackType TrackType, payload []byte) (int, error)) {
+func (c *StandardMediaTransport) OnRtpPacket(rtpHandler func(trackType TrackType, pkt rtp.Packet) (int, error)) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.rtpHandler = rtpHandler
 }
 
-func (c *StandardMediaTransport) OnRtcpPacket(rtcpHandler func(trackType TrackType, payload []byte) (int, error)) {
+func (c *StandardMediaTransport) OnRtcpPacket(rtcpHandler func(trackType TrackType, pkt rtcp.Packet) (int, error)) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.rtcpHandler = rtcpHandler
@@ -138,14 +131,14 @@ func (c *StandardMediaTransport) OnRequestKeyFrame(keyHandler func() error) {
 }
 
 func (c *StandardMediaTransport) onRtpPacket(trackType TrackType, packet []byte, raddr net.Addr) error {
-	logger.Debugf("UdpTansport::onRtpPacket: %v read %d bytes, raddr %v", trackType, len(packet), raddr)
+	logger.Tracef("UdpTansport::onRtpPacket: %v read %d bytes, raddr %v", trackType, len(packet), raddr)
 
-	p := &rtp.Packet{}
+	p := rtp.Packet{}
 	if err := p.Unmarshal(packet); err != nil {
 		logger.Errorf("rtp.Packet Unmarshal: e %v len %v", err, len(packet))
 	}
 
-	logger.Debugf("UdpTansport::onRtpPacket: [%v] read %d bytes, seq %d, ts %d, ssrc %v, payload %v", trackType, len(packet), p.SequenceNumber, p.Timestamp, p.SSRC, p.PayloadType)
+	logger.Tracef("UdpTansport::onRtpPacket: [%v] read %d bytes, seq %d, ts %d, ssrc %v, payload %v", trackType, len(packet), p.SequenceNumber, p.Timestamp, p.SSRC, p.PayloadType)
 
 	if trackType == TrackTypeVideo && c.videoSSRC == 0 {
 		c.videoSSRC = p.SSRC
@@ -155,33 +148,37 @@ func (c *StandardMediaTransport) onRtpPacket(trackType TrackType, packet []byte,
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	if c.rtpHandler != nil {
-		if _, err := c.rtpHandler(trackType, packet); err != nil {
+		if _, err := c.rtpHandler(trackType, p); err != nil {
 			logger.Warnf("UdpTansport::onRtpPacket: panic => %v", err)
 		}
 	}
 	return nil
 }
 
-func (c *StandardMediaTransport) onRtcpPacket(trackType TrackType, packet []byte, raddr net.Addr) error {
-	logger.Debugf("UdpTansport::OnRtcpPacketReceived: %v read %d bytes, raddr %v", trackType, len(packet), raddr)
+func (c *StandardMediaTransport) onRtcpPacket(trackType TrackType, buf []byte, raddr net.Addr) error {
+	logger.Tracef("UdpTansport::OnRtcpPacketReceived: %v read %d bytes, raddr %v", trackType, len(buf), raddr)
 	c.mu.RLock()
 	defer c.mu.RUnlock()
+
+	pkts, err := rtcp.Unmarshal(buf)
+
+	if err != nil {
+		//logger.Warnf("UdpTansport::OnRtcpPacketReceived: Unmarshal rtcp receiver packets err %v", err)
+		return err
+	}
+
 	if c.rtcpHandler != nil {
-		if _, err := c.rtcpHandler(trackType, packet); err != nil {
-			logger.Warnf("UdpTansport::onRtcpPacket: panic => %v", err)
+		for _, pkt := range pkts {
+			if _, err := c.rtcpHandler(trackType, pkt); err != nil {
+				logger.Warnf("UdpTansport::onRtcpPacket: panic => %v", err)
+			}
 		}
 	}
 	return nil
 }
 
-func (c *StandardMediaTransport) WriteRTP(trackType TrackType, packet []byte) (int, error) {
-	logger.Debugf("UdpTansport::WriteRTP: %v, write %d bytes", trackType, len(packet))
-
-	p := &rtp.Packet{}
-	if err := p.Unmarshal(packet); err != nil {
-		logger.Errorf("tp.Packet Unmarshal: e %v", err)
-	}
-	logger.Debugf("UdpTansport::WriteRTP: %v, write %d bytes, seq %d, ts %d", trackType, len(packet), p.SequenceNumber, p.Timestamp)
+func (c *StandardMediaTransport) WriteRTP(trackType TrackType, pkt rtp.Packet) (int, error) {
+	logger.Tracef("UdpTansport::WriteRTP: %v, write %d bytes", trackType, len(pkt.Payload))
 
 	port := c.ports[trackType]
 
@@ -196,8 +193,8 @@ func (c *StandardMediaTransport) WriteRTP(trackType TrackType, packet []byte) (i
 	}
 
 	//re-write payload type
-	p.PayloadType = track.Codecs[0].Payload
-	pktbuf, err := p.Marshal()
+	pkt.PayloadType = track.Codecs[0].Payload
+	pktbuf, err := pkt.Marshal()
 
 	if err != nil {
 		logger.Errorf("UdpTansport::WriteRTP: Marshal rtp receiver packets err %v", err)
@@ -206,23 +203,22 @@ func (c *StandardMediaTransport) WriteRTP(trackType TrackType, packet []byte) (i
 	return port.WriteRtp(pktbuf)
 }
 
-func (c *StandardMediaTransport) WriteRTCP(trackType TrackType, packet []byte) (int, error) {
-	logger.Debugf("UdpTansport::WriteRTCP: %v, write %d bytes", trackType, len(packet))
-	/*
-		pkts, err := rtcp.Unmarshal(packet)
-		if err != nil {
-			logger.Errorf("UdpTansport::WriteRTP: Unmarshal rtcp receiver packets err %v", err)
-		}
-
-		logger.Debugf("UdpTansport::WriteRTCP: %v read %d packets", trackType, len(pkts))
-	*/
+func (c *StandardMediaTransport) WriteRTCP(trackType TrackType, pkt rtcp.Packet) (int, error) {
 	port := c.ports[trackType]
 
 	if port == nil {
 		logger.Errorf("UdpTansport::WriteRTCP: port is nil")
 		return 0, nil
 	}
-	return port.WriteRtcp(packet)
+
+	buf, err := pkt.Marshal()
+	if err != nil {
+		logger.Errorf("UdpTansport::WriteRTCP: Marshal rtcp receiver packets err %v", err)
+		return 0, err
+	}
+
+	logger.Tracef("UdpTansport::WriteRTCP: %v, write %d bytes", trackType, len(buf))
+	return port.WriteRtcp(buf)
 }
 
 func (c *StandardMediaTransport) Type() MediaTransportType {
@@ -284,15 +280,11 @@ func (c *StandardMediaTransport) RequestKeyFrame() error {
 
 func (c *StandardMediaTransport) sendPLI(ssrc uint32) error {
 	pli := rtcp.PictureLossIndication{MediaSSRC: uint32(ssrc)}
-	buf, err := pli.Marshal()
-	if err != nil {
-		logger.Error(err)
-		return err
-	}
-	_, errSend := c.WriteRTCP(TrackTypeVideo, buf)
+
+	_, errSend := c.WriteRTCP(TrackTypeVideo, &pli)
 	if errSend != nil {
 		logger.Error(errSend)
-		return err
+		return errSend
 	}
 	logger.Infof("Sent PLI %v", pli)
 	return nil
@@ -307,12 +299,7 @@ func (c *StandardMediaTransport) sendTntervalPlic(ssrc uint32) error {
 				return
 			}
 			pli := rtcp.PictureLossIndication{SenderSSRC: uint32(0), MediaSSRC: uint32(ssrc)}
-			buf, err := pli.Marshal()
-			if err != nil {
-				logger.Error(err)
-				return
-			}
-			_, errSend := c.WriteRTCP(TrackTypeVideo, buf)
+			_, errSend := c.WriteRTCP(TrackTypeVideo, &pli)
 			if errSend != nil {
 				logger.Error(errSend)
 				return

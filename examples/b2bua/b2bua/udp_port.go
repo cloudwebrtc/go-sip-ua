@@ -146,7 +146,7 @@ func (c *UdpPort) WriteRtp(data []byte) (int, error) {
 		return 0, fmt.Errorf("udpConns is nil")
 	}
 
-	logger.Debugf("UdpPort::WriteRTP: raddr %v", c.rAddr)
+	logger.Tracef("UdpPort::WriteRTP: raddr %v", c.rAddr)
 	return c.udpConns[0].WriteToUDP(data, c.rAddr)
 }
 
@@ -167,7 +167,7 @@ func (c *UdpPort) WriteRtcp(data []byte) (int, error) {
 		return 0, fmt.Errorf("udpConns is nil")
 	}
 
-	logger.Debugf("UdpPort::WriteRTCP: %d packets, raddr %v", len(data), addr)
+	logger.Tracef("UdpPort::WriteRTCP: %d packets, raddr %v", len(data), addr)
 	return c.udpConns[1].WriteToUDP(data, addr)
 }
 

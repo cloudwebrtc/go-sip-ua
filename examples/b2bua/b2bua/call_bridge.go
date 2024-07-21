@@ -65,6 +65,7 @@ func (b *CallBridge) Terminate(call *Call) {
 }
 
 func BridgeMediaStream(src, dest MediaTransport) error {
+	// 这里
 	src.OnRtpPacket(dest.WriteRTP)
 	src.OnRtcpPacket(dest.WriteRTCP)
 	src.OnRequestKeyFrame(dest.RequestKeyFrame)

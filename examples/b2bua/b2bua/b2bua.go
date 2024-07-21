@@ -6,6 +6,7 @@ import (
 	"github.com/cloudwebrtc/go-sip-ua/examples/b2bua/fcm"
 	"github.com/cloudwebrtc/go-sip-ua/examples/b2bua/pushkit"
 	"github.com/cloudwebrtc/go-sip-ua/examples/b2bua/registry"
+	"github.com/pion/webrtc/v3"
 
 	"github.com/cloudwebrtc/go-sip-ua/pkg/account"
 	"github.com/cloudwebrtc/go-sip-ua/pkg/auth"
@@ -80,9 +81,9 @@ func init() {
 		SSLKey:          "certs/key.pem",
 		UdpPortRange:    []int{60000, 65535},
 		UaMediaConfig: UserAgentMediaConfig{
-			Codecs:             []string{"PCMU", "PCMA", "opus", "H264", "VP8", "VP9"},
+			Codecs:             []string{"PCMU", "PCMA", "H264"},
 			ExternalRtpAddress: "0.0.0.0",
-			RtcpFeedback:       []string{"nack", "nack pli", "ccm fir", "goog-remb", "transport-cc"},
+			RtcpFeedback:       []webrtc.RTCPFeedback{{"goog-remb", ""}, {"transport-cc", ""}, {"ccm", "fir"}, {"nack", ""}, {"nack", "pli"}},
 		},
 	}
 }

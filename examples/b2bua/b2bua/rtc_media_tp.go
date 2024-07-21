@@ -71,8 +71,8 @@ type WebRTCMediaTransport struct {
 	buff                   *buffer.Buffer
 	bmu                    sync.Mutex
 	mu                     sync.RWMutex
-	rtpHandler             func(trackType TrackType, payload []byte) (int, error)
-	rtcpHandler            func(trackType TrackType, payload []byte) (int, error)
+	rtpHandler             func(trackType TrackType, pkt rtp.Packet) (int, error)
+	rtcpHandler            func(trackType TrackType, pkt rtcp.Packet) (int, error)
 	requestKeyFrameHandler func() error
 }
 
@@ -108,96 +108,114 @@ func (c *WebRTCMediaTransport) Type() MediaTransportType {
 func (c *WebRTCMediaTransport) Init(umc UserAgentMediaConfig) error {
 	// Create a MediaEngine object to configure the supported codec
 	m := &webrtc.MediaEngine{}
-
-	for _, trackInfo := range c.md.Tracks {
-		if trackInfo.TrackType == TrackTypeAudio {
-			for _, codec := range trackInfo.Codecs {
-				mimeType := fmt.Sprintf("audio/%s", codec.Name)
-				sdpFmtpLine := strings.Join(codec.Params, ";")
-				var rtcpFb []webrtc.RTCPFeedback = nil
-				for _, fb := range codec.Feedback {
-					vals := strings.Split(fb, " ")
-					if len(vals) < 2 {
-						rtcpFb = append(rtcpFb, webrtc.RTCPFeedback{Type: vals[0], Parameter: ""})
-					} else {
-						rtcpFb = append(rtcpFb, webrtc.RTCPFeedback{Type: vals[0], Parameter: vals[1]})
+	/*
+		for _, trackInfo := range c.md.Tracks {
+			if trackInfo.TrackType == TrackTypeAudio {
+				for _, codec := range trackInfo.Codecs {
+					mimeType := fmt.Sprintf("audio/%s", codec.Name)
+					sdpFmtpLine := strings.Join(codec.Params, ";")
+					var rtcpFb []webrtc.RTCPFeedback = nil
+					for _, fb := range codec.Feedback {
+						vals := strings.Split(fb, " ")
+						if len(vals) < 2 {
+							rtcpFb = append(rtcpFb, webrtc.RTCPFeedback{Type: vals[0], Parameter: ""})
+						} else {
+							rtcpFb = append(rtcpFb, webrtc.RTCPFeedback{Type: vals[0], Parameter: vals[1]})
+						}
+					}
+					if err := m.RegisterCodec(webrtc.RTPCodecParameters{
+						RTPCodecCapability: webrtc.RTPCodecCapability{
+							MimeType:     mimeType,
+							ClockRate:    uint32(codec.ClockRate),
+							Channels:     uint16(codec.Channels),
+							SDPFmtpLine:  sdpFmtpLine,
+							RTCPFeedback: rtcpFb},
+						PayloadType: webrtc.PayloadType(codec.Payload),
+					}, webrtc.RTPCodecTypeAudio); err != nil {
+						return err
 					}
 				}
-				if err := m.RegisterCodec(webrtc.RTPCodecParameters{
-					RTPCodecCapability: webrtc.RTPCodecCapability{
-						MimeType:     mimeType,
-						ClockRate:    uint32(codec.ClockRate),
-						Channels:     uint16(codec.Channels),
-						SDPFmtpLine:  sdpFmtpLine,
-						RTCPFeedback: rtcpFb},
-					PayloadType: webrtc.PayloadType(codec.Payload),
-				}, webrtc.RTPCodecTypeAudio); err != nil {
-					return err
+			} else if trackInfo.TrackType == TrackTypeVideo {
+				for _, codec := range trackInfo.Codecs {
+					mimeType := fmt.Sprintf("video/%s", codec.Name)
+					sdpFmtpLine := strings.Join(codec.Params, ";")
+					var rtcpFb []webrtc.RTCPFeedback = nil
+					for _, fb := range codec.Feedback {
+						vals := strings.Split(fb, " ")
+						if len(vals) < 2 {
+							rtcpFb = append(rtcpFb, webrtc.RTCPFeedback{Type: vals[0], Parameter: ""})
+						} else {
+							rtcpFb = append(rtcpFb, webrtc.RTCPFeedback{Type: vals[0], Parameter: vals[1]})
+						}
+					}
+					if err := m.RegisterCodec(webrtc.RTPCodecParameters{
+						RTPCodecCapability: webrtc.RTPCodecCapability{
+							MimeType:     mimeType,
+							ClockRate:    uint32(codec.ClockRate),
+							SDPFmtpLine:  sdpFmtpLine,
+							RTCPFeedback: rtcpFb},
+						PayloadType: webrtc.PayloadType(codec.Payload),
+					}, webrtc.RTPCodecTypeVideo); err != nil {
+						return err
+					}
 				}
 			}
-		} else if trackInfo.TrackType == TrackTypeVideo {
-			for _, codec := range trackInfo.Codecs {
-				mimeType := fmt.Sprintf("video/%s", codec.Name)
-				sdpFmtpLine := strings.Join(codec.Params, ";")
-				var rtcpFb []webrtc.RTCPFeedback = nil
-				for _, fb := range codec.Feedback {
-					vals := strings.Split(fb, " ")
-					if len(vals) < 2 {
-						rtcpFb = append(rtcpFb, webrtc.RTCPFeedback{Type: vals[0], Parameter: ""})
-					} else {
-						rtcpFb = append(rtcpFb, webrtc.RTCPFeedback{Type: vals[0], Parameter: vals[1]})
+		}
+	*/
+
+	for _, codec := range []webrtc.RTPCodecParameters{
+		{
+			RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypePCMU, ClockRate: 8000, Channels: 1, SDPFmtpLine: "", RTCPFeedback: nil},
+			PayloadType:        0,
+		},
+		{
+			RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypePCMA, ClockRate: 8000, Channels: 1, SDPFmtpLine: "", RTCPFeedback: nil},
+			PayloadType:        8,
+		},
+		{
+			RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: mimeTypeOpus, ClockRate: 48000, Channels: 2, SDPFmtpLine: "minptime=10;useinbandfec=1", RTCPFeedback: nil},
+			PayloadType:        111,
+		},
+	} {
+		for _, trackInfo := range c.md.Tracks {
+			if trackInfo.TrackType == TrackTypeAudio {
+				for _, c := range trackInfo.Codecs {
+					if strings.Contains(strings.ToLower(codec.RTPCodecCapability.MimeType), strings.ToLower(c.Name)) {
+						codec.PayloadType = webrtc.PayloadType(c.Payload)
+						if err := m.RegisterCodec(codec, webrtc.RTPCodecTypeAudio); err != nil {
+							return err
+						}
 					}
-				}
-				if err := m.RegisterCodec(webrtc.RTPCodecParameters{
-					RTPCodecCapability: webrtc.RTPCodecCapability{
-						MimeType:     mimeType,
-						ClockRate:    uint32(codec.ClockRate),
-						SDPFmtpLine:  sdpFmtpLine,
-						RTCPFeedback: rtcpFb},
-					PayloadType: webrtc.PayloadType(codec.Payload),
-				}, webrtc.RTPCodecTypeVideo); err != nil {
-					return err
 				}
 			}
 		}
 	}
-	/*
-		for _, codec := range []webrtc.RTPCodecParameters{
-			{
-				RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypePCMU, ClockRate: 8000, Channels: 1, SDPFmtpLine: "", RTCPFeedback: nil},
-				PayloadType:        0,
-			},
-			{
-				RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypePCMA, ClockRate: 8000, Channels: 1, SDPFmtpLine: "", RTCPFeedback: nil},
-				PayloadType:        8,
-			},
-			{
-				RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: mimeTypeOpus, ClockRate: 48000, Channels: 2, SDPFmtpLine: "minptime=10;useinbandfec=1", RTCPFeedback: nil},
-				PayloadType:        111,
-			},
-		} {
-			if err := m.RegisterCodec(codec, webrtc.RTPCodecTypeAudio); err != nil {
-				return err
+
+	videoRTCPFeedback := b2buaConfig.UaMediaConfig.RtcpFeedback
+
+	for _, codec := range []webrtc.RTPCodecParameters{
+		{
+			RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: mimeTypeVP8, ClockRate: 90000, RTCPFeedback: videoRTCPFeedback},
+			PayloadType:        100,
+		},
+		{
+			RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: mimeTypeH264, ClockRate: 90000, SDPFmtpLine: "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=640c33", RTCPFeedback: videoRTCPFeedback},
+			PayloadType:        96,
+		},
+	} {
+		for _, trackInfo := range c.md.Tracks {
+			if trackInfo.TrackType == TrackTypeVideo {
+				for _, c := range trackInfo.Codecs {
+					if strings.Contains(strings.ToLower(codec.RTPCodecCapability.MimeType), strings.ToLower(c.Name)) {
+						codec.PayloadType = webrtc.PayloadType(c.Payload)
+						if err := m.RegisterCodec(codec, webrtc.RTPCodecTypeVideo); err != nil {
+							return err
+						}
+					}
+				}
 			}
 		}
-
-		videoRTCPFeedback := []webrtc.RTCPFeedback{{"goog-remb", ""}, {"transport-cc", ""}, {"ccm", "fir"}, {"nack", ""}, {"nack", "pli"}}
-
-		for _, codec := range []webrtc.RTPCodecParameters{
-			{
-				RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: mimeTypeVP8, ClockRate: 90000, RTCPFeedback: videoRTCPFeedback},
-				PayloadType:        100,
-			},
-			{
-				RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: mimeTypeH264, ClockRate: 90000, SDPFmtpLine: "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=640c33", RTCPFeedback: videoRTCPFeedback},
-				PayloadType:        96,
-			},
-		} {
-			if err := m.RegisterCodec(codec, webrtc.RTPCodecTypeVideo); err != nil {
-				return err
-			}
-		}
-	*/
+	}
 	// Create a InterceptorRegistry. This is the user configurable RTP/RTCP Pipeline.
 	// This provides NACKs, RTCP Reports and other features. If you use `webrtc.NewPeerConnection`
 	// this is enabled by default. If you are manually managing You MUST create a InterceptorRegistry
@@ -275,13 +293,13 @@ func (c *WebRTCMediaTransport) Init(umc UserAgentMediaConfig) error {
 	return nil
 }
 
-func (c *WebRTCMediaTransport) OnRtpPacket(rtpHandler func(trackType TrackType, payload []byte) (int, error)) {
+func (c *WebRTCMediaTransport) OnRtpPacket(rtpHandler func(trackType TrackType, pkt rtp.Packet) (int, error)) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.rtpHandler = rtpHandler
 }
 
-func (c *WebRTCMediaTransport) OnRtcpPacket(rtcpHandler func(trackType TrackType, payload []byte) (int, error)) {
+func (c *WebRTCMediaTransport) OnRtcpPacket(rtcpHandler func(trackType TrackType, pkt rtcp.Packet) (int, error)) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.rtcpHandler = rtcpHandler
@@ -294,13 +312,18 @@ func (c *WebRTCMediaTransport) OnRequestKeyFrame(keyHandler func() error) {
 }
 
 func (c *WebRTCMediaTransport) onRtpPacket(trackType TrackType, packet []byte) error {
-	logger.Debugf("WebRTCTransport::OnRtpPacketReceived: %v read %d bytes", trackType, len(packet))
-
+	logger.Tracef("WebRTCTransport::OnRtpPacketReceived: %v read %d bytes", trackType, len(packet))
 	c.mu.RLock()
 	defer c.mu.RUnlock()
+
+	p := rtp.Packet{}
+	if err := p.Unmarshal(packet); err != nil {
+		return err
+	}
+
 	if c.rtpHandler != nil {
-		if _, err := c.rtpHandler(trackType, packet); err != nil {
-			logger.Errorf("WebRTCTransport::onRtpPacket: panic => %v", err)
+		if _, err := c.rtpHandler(trackType, p); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -308,33 +331,42 @@ func (c *WebRTCMediaTransport) onRtpPacket(trackType TrackType, packet []byte) e
 
 func (c *WebRTCMediaTransport) onRtcpPacket(trackType TrackType, packet []byte) error {
 	logger.Debugf("WebRTCTransport::OnRtcpPacketReceived: %v read %d bytes", trackType, len(packet))
-
 	c.mu.RLock()
 	defer c.mu.RUnlock()
+
+	pkts, err := rtcp.Unmarshal(packet)
+	if err != nil {
+		return err
+	}
+
 	if c.rtcpHandler != nil {
-		if _, err := c.rtcpHandler(trackType, packet); err != nil {
-			logger.Errorf("WebRTCTransport::onRtcpPacket: panic => %v", err)
+		for _, pkt := range pkts {
+			if _, err := c.rtcpHandler(trackType, pkt); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
 }
 
-func (c *WebRTCMediaTransport) WriteRTP(trackType TrackType, packet []byte) (int, error) {
+func (c *WebRTCMediaTransport) WriteRTP(trackType TrackType, pkt rtp.Packet) (int, error) {
 	if c.closed.Get() {
 		return 0, fmt.Errorf("WebRTCTransport::SendRtpPacket: closed")
 	}
 	if trackType == TrackTypeAudio {
 		if c.localTracks[TrackTypeAudio] != nil {
-			return c.localTracks[TrackTypeAudio].Write(packet)
+			err := c.localTracks[TrackTypeAudio].WriteRTP(&pkt)
+			if err != nil {
+				return 0, fmt.Errorf("WebRTCTransport::SendRtpPacket: %v", err)
+			}
+			return len(pkt.Payload), nil
 		}
 	} else if trackType == TrackTypeVideo {
 		if c.localTracks[TrackTypeVideo] != nil {
-			var pkt rtp.Packet
-			if err := pkt.Unmarshal(packet); err == nil {
+			if buf, err := pkt.Marshal(); err == nil {
 				c.bmu.Lock()
 				if c.buff != nil {
-					c.buff.Write(packet)
-					//pktExt, err := c.buff.ReadExtended()
+					c.buff.Write(buf)
 					if err != io.EOF {
 						if c.sequencer != nil {
 							c.sequencer.push(pkt.SequenceNumber, pkt.SequenceNumber, pkt.Timestamp, 0, true)
@@ -344,26 +376,27 @@ func (c *WebRTCMediaTransport) WriteRTP(trackType TrackType, packet []byte) (int
 				c.bmu.Unlock()
 			}
 
-			return c.localTracks[TrackTypeVideo].Write(packet)
+			err := c.localTracks[TrackTypeVideo].WriteRTP(&pkt)
+			if err != nil {
+				return 0, fmt.Errorf("WebRTCTransport::SendRtpPacket: %v", err)
+			}
+			return len(pkt.Payload), nil
 		}
 	}
 	return 0, fmt.Errorf("WebRTCTransport::SendRtpPacket: invalid trackType %v", trackType)
 }
 
-func (c *WebRTCMediaTransport) WriteRTCP(trackType TrackType, packet []byte) (n int, err error) {
+func (c *WebRTCMediaTransport) WriteRTCP(trackType TrackType, pkt rtcp.Packet) (n int, err error) {
 	if c.closed.Get() {
 		return 0, fmt.Errorf("WebRTCTransport::SendRtcpPacket: closed")
 	}
-	rtcpPacket, err := rtcp.Unmarshal(packet)
-	if err != nil {
-		return 0, fmt.Errorf("WebRTCTransport::SendRtcpPacket: rtcp.Unmarshal err => %v", err)
-	}
-	err = c.pc.WriteRTCP(rtcpPacket)
+
+	err = c.pc.WriteRTCP([]rtcp.Packet{pkt})
 	if err != nil {
 		return 0, fmt.Errorf("WebRTCTransport::SendRtcpPacket: pc.WriteRTCP err => %v", err)
 	}
 
-	return len(packet), nil
+	return 0, nil
 }
 
 func (c *WebRTCMediaTransport) Close() error {
@@ -527,7 +560,7 @@ func (c *WebRTCMediaTransport) HandleRtcpFb(rtpSender *webrtc.RTPSender) {
 				case *rtcp.PictureLossIndication:
 					if pliOnce {
 						fwdPkts = append(fwdPkts, p)
-						logger.Infof("Picture Loss Indication")
+						logger.Tracef("Picture Loss Indication")
 						if c.requestKeyFrameHandler != nil {
 							c.requestKeyFrameHandler()
 						}
@@ -536,7 +569,7 @@ func (c *WebRTCMediaTransport) HandleRtcpFb(rtpSender *webrtc.RTPSender) {
 				case *rtcp.FullIntraRequest:
 					if firOnce {
 						fwdPkts = append(fwdPkts, p)
-						logger.Infof("FullIntraRequest")
+						logger.Tracef("FullIntraRequest")
 						if c.requestKeyFrameHandler != nil {
 							c.requestKeyFrameHandler()
 						}
@@ -546,13 +579,13 @@ func (c *WebRTCMediaTransport) HandleRtcpFb(rtpSender *webrtc.RTPSender) {
 					if expectedMinBitrate == 0 || expectedMinBitrate > uint64(p.Bitrate) {
 						expectedMinBitrate = uint64(p.Bitrate)
 						//hi.CameraUpdateBitrate(uint32(expectedMinBitrate / 1024))
-						logger.Debugf("[%v] ReceiverEstimatedMaximumBitrate %d", rtpSender.Track().Kind(), expectedMinBitrate/1024)
+						logger.Tracef("[%v] ReceiverEstimatedMaximumBitrate %d", rtpSender.Track().Kind(), expectedMinBitrate/1024)
 					}
 				case *rtcp.ReceiverReport:
 					for _, r := range p.Reports {
 						if maxRatePacketLoss == 0 || maxRatePacketLoss < r.FractionLost {
 							maxRatePacketLoss = r.FractionLost
-							logger.Infof("maxRatePacketLoss %d", maxRatePacketLoss)
+							logger.Tracef("maxRatePacketLoss %d", maxRatePacketLoss)
 						}
 					}
 				case *rtcp.TransportLayerNack:
