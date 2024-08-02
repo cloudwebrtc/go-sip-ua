@@ -34,7 +34,8 @@ func (ml *MyLogger) Level() string {
 }
 
 var (
-	loggers map[string]*MyLogger
+	loggers         map[string]*MyLogger
+	DefaultLogLevel = log.DebugLevel
 )
 
 func init() {
@@ -59,14 +60,14 @@ func NewLogrusLogger(level log.Level, prefix string, fields log.Fields) log.Logg
 		Logger: logger,
 		level:  level,
 	}
-	logger.SetLevel(level)
+	logger.SetLevel(uint32(level))
 	return logger.WithPrefix(prefix)
 }
 
 func SetLogLevel(prefix string, level log.Level) error {
 	if logger, found := loggers[prefix]; found {
 		logger.level = level
-		logger.Logger.SetLevel(level)
+		logger.Logger.SetLevel(uint32(level))
 		return nil
 	}
 	return fmt.Errorf("logger [%v] not found", prefix)

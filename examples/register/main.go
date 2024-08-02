@@ -21,7 +21,7 @@ var (
 )
 
 func init() {
-	logger = utils.NewLogrusLogger(log.DebugLevel, "Register", nil)
+	logger = utils.NewLogrusLogger(utils.DefaultLogLevel, "Register", nil)
 }
 
 func main() {

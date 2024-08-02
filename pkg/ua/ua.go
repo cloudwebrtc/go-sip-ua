@@ -38,13 +38,13 @@ type UserAgentConfig struct {
 	SipStack *stack.SipStack
 }
 
-//InviteSessionHandler .
+// InviteSessionHandler .
 type InviteSessionHandler func(s *session.Session, req *sip.Request, resp *sip.Response, status session.Status)
 
-//RegisterHandler .
+// RegisterHandler .
 type RegisterHandler func(regState account.RegisterState)
 
-//UserAgent .
+// UserAgent .
 type UserAgent struct {
 	InviteStateHandler   InviteSessionHandler
 	RegisterStateHandler RegisterHandler
@@ -53,14 +53,14 @@ type UserAgent struct {
 	log                  log.Logger
 }
 
-//NewUserAgent .
+// NewUserAgent .
 func NewUserAgent(config *UserAgentConfig) *UserAgent {
 	ua := &UserAgent{
 		config:               config,
 		iss:                  sync.Map{},
 		InviteStateHandler:   nil,
 		RegisterStateHandler: nil,
-		log:                  utils.NewLogrusLogger(log.DebugLevel, "UserAgent", nil),
+		log:                  utils.NewLogrusLogger(utils.DefaultLogLevel, "UserAgent", nil),
 	}
 	stack := config.SipStack
 	stack.OnRequest(sip.INVITE, ua.handleInvite)
@@ -208,16 +208,27 @@ func (ua *UserAgent) handleBye(request sip.Request, tx sip.ServerTransaction) {
 	response := sip.NewResponseFromRequest(request.MessageID(), request, 200, "OK", "")
 	tx.Respond(response)
 	callID, ok := request.CallID()
-	fromHeader, ok2 := request.From()
-	if ok && ok2 {
-		fromTag, _ := fromHeader.Params.Get("tag")
-		if v, found := ua.iss.Load(NewSessionKey(*callID, fromTag)); found {
-			is := v.(*session.Session)
-			ua.iss.Delete(NewSessionKey(*callID, fromTag))
+	if ok {
+		if sess, sessKey := ua.findSessionByCallID(*callID); sess != nil {
+			ua.iss.Delete(sessKey)
 			var transaction sip.Transaction = tx.(sip.Transaction)
-			ua.handleInviteState(is, &request, &response, session.Terminated, &transaction)
+			ua.handleInviteState(sess, &request, &response, session.Terminated, &transaction)
 		}
 	}
+}
+
+func (ua *UserAgent) findSessionByCallID(callID sip.CallID) (*session.Session, SessionKey) {
+	var ret *session.Session = nil
+	var sessKey SessionKey
+	ua.iss.Range(func(key, value interface{}) bool {
+		if key.(SessionKey).CallID == callID {
+			ret = value.(*session.Session)
+			sessKey = key.(SessionKey)
+			return false
+		}
+		return true
+	})
+	return ret, sessKey
 }
 
 func (ua *UserAgent) handleCancel(request sip.Request, tx sip.ServerTransaction) {

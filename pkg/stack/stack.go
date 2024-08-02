@@ -78,7 +78,7 @@ func NewSipStack(config *SipStackConfig) *SipStack {
 		config = &SipStackConfig{}
 	}
 
-	logger := utils.NewLogrusLogger(log.DebugLevel, "SipStack", nil)
+	logger := utils.NewLogrusLogger(utils.DefaultLogLevel, "SipStack", nil)
 
 	var host string
 	var ip net.IP
@@ -134,12 +134,12 @@ func NewSipStack(config *SipStackConfig) *SipStack {
 	}
 
 	s.log = logger
-	s.tp = transport.NewLayer(ip, dnsResolver, config.MsgMapper, utils.NewLogrusLogger(log.DebugLevel, "transport.Layer", nil))
+	s.tp = transport.NewLayer(ip, dnsResolver, config.MsgMapper, utils.NewLogrusLogger(utils.DefaultLogLevel, "transport.Layer", nil))
 	sipTp := &sipTransport{
 		tpl: s.tp,
 		s:   s,
 	}
-	s.tx = transaction.NewLayer(sipTp, utils.NewLogrusLogger(log.DebugLevel, "transaction.Layer", nil))
+	s.tx = transaction.NewLayer(sipTp, utils.NewLogrusLogger(utils.DefaultLogLevel, "transaction.Layer", nil))
 
 	s.running.Set()
 	go s.serve()

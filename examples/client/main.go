@@ -25,7 +25,7 @@ var (
 )
 
 func init() {
-	logger = utils.NewLogrusLogger(log.DebugLevel, "Client", nil)
+	logger = utils.NewLogrusLogger(utils.DefaultLogLevel, "Client", nil)
 }
 
 func createUdp() *rtp.RtpUDPStream {

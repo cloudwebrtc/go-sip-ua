@@ -18,11 +18,12 @@ import (
 func completer(d prompt.Document) []prompt.Suggest {
 	s := []prompt.Suggest{
 		{Text: "users", Description: "Show sip accounts"},
-		{Text: "onlines", Description: "Show online sip devices"},
+		{Text: "show onlines", Description: "Show online sip devices"},
 		{Text: "calls", Description: "Show active calls"},
+		{Text: "originate", Description: "Originate a call and bridge to another call"},
 		{Text: "set debug on", Description: "Show debug msg in console"},
 		{Text: "set debug off", Description: "Turn off debug msg in console"},
-		{Text: "show loggers", Description: "Print Loggers"},
+		{Text: "loggers level", Description: "Print Loggers"},
 		{Text: "exit", Description: "Exit"},
 	}
 	return prompt.FilterHasPrefix(s, d.GetWordBeforeCursor(), true)
@@ -38,8 +39,21 @@ Options:
 }
 
 func consoleLoop(b2bua *b2bua.B2BUA) {
-
-	fmt.Println("Please select command.")
+	usersCompleter := func(d prompt.Document) []prompt.Suggest {
+		accounts := b2bua.GetAccounts()
+		s := make([]prompt.Suggest, 0, len(accounts))
+		for user := range accounts {
+			s = append(s, prompt.Suggest{Text: user, Description: "User"})
+		}
+		aors := b2bua.GetRegistry().GetAllContacts()
+		for aor := range aors {
+			for _, instance := range aors[aor] {
+				s = append(s, prompt.Suggest{Text: instance.Contact.Address.String(), Description: "online device"})
+			}
+		}
+		return prompt.FilterHasPrefix(s, d.GetWordBeforeCursor(), true)
+	}
+	fmt.Println("Please select command, type ? or h or help for help")
 	for {
 		t := prompt.Input("CLI> ", completer,
 			prompt.OptionTitle("GO B2BUA 1.0.0"),
@@ -74,14 +88,20 @@ func consoleLoop(b2bua *b2bua.B2BUA) {
 			} else {
 				fmt.Printf("No users\n")
 			}
+		case "originate":
+			fmt.Printf("Enter the source user: ")
+			source := prompt.Input("Source> ", usersCompleter)
+			fmt.Printf("Enter the destination user: ")
+			destination := prompt.Input("Destination> ", usersCompleter)
+			b2bua.Originate(source, destination)
 		case "calls":
 			fallthrough
 		case "cl": /* call list*/
-			calls := b2bua.Calls()
-			if len(calls) > 0 {
-				fmt.Printf("Calls:\n")
-				for _, call := range calls {
-					fmt.Printf("%v:\n", call.ToString())
+			bridges := b2bua.BridgedCalls()
+			if len(bridges) > 0 {
+				fmt.Printf("Bridged Calls:\n")
+				for _, call := range bridges {
+					fmt.Printf("%v\n", call.ToString())
 				}
 			} else {
 				fmt.Printf("No active calls\n")
@@ -114,6 +134,20 @@ func consoleLoop(b2bua *b2bua.B2BUA) {
 			} else {
 				fmt.Printf("No pn records\n")
 			}
+		case "?":
+			fallthrough
+		case "h":
+			fallthrough
+		case "help":
+			fmt.Println("Commands:")
+			fmt.Println("  users: Show sip accounts")
+			fmt.Println("  onlines: Show online sip devices")
+			fmt.Println("  calls: Show active calls")
+			fmt.Println("  originate: Originate a call and bridge to another call")
+			fmt.Println("  set debug on: Show debug msg in console")
+			fmt.Println("  set debug off: Turn off debug msg in console")
+			fmt.Println("  show loggers: Print Loggers")
+			fmt.Println("  exit: Exit")
 		case "exit":
 			fmt.Println("Exit now.")
 			b2bua.Shutdown()
@@ -122,15 +156,28 @@ func consoleLoop(b2bua *b2bua.B2BUA) {
 	}
 }
 
+var (
+	logger log.Logger
+)
+
+func init() {
+	logger = utils.NewLogrusLogger(utils.DefaultLogLevel, "main", nil)
+}
+
 func main() {
 	noconsole := false
 	disableAuth := false
 	enableTLS := false
+	enableWebsocket := true
+	enalbeRFC8599 := false
+
 	h := false
 	flag.BoolVar(&h, "h", false, "this help")
 	flag.BoolVar(&noconsole, "nc", false, "no console mode")
 	flag.BoolVar(&disableAuth, "da", false, "disable auth mode")
-	flag.BoolVar(&enableTLS, "tls", false, "enable TLS")
+	flag.BoolVar(&enableTLS, "tls", false, "enable tls")
+	flag.BoolVar(&enableWebsocket, "ws", false, "enable websocket")
+	flag.BoolVar(&enalbeRFC8599, "rfc8599", false, "enable rfc8599 push notification")
 	flag.Usage = usage
 
 	flag.Parse()
@@ -144,11 +191,11 @@ func main() {
 	signal.Notify(stop, syscall.SIGTERM, syscall.SIGINT)
 
 	go func() {
-		fmt.Print("Start pprof on :6658\n")
+		logger.Info("Start pprof on :6658")
 		http.ListenAndServe(":6658", nil)
 	}()
 
-	b2bua := b2bua.NewB2BUA(disableAuth, enableTLS)
+	b2bua := b2bua.NewB2BUA(disableAuth, enableTLS, enableWebsocket, enalbeRFC8599)
 
 	// Add sample accounts.
 	b2bua.AddAccount("100", "100")
@@ -159,6 +206,8 @@ func main() {
 	if !noconsole {
 		consoleLoop(b2bua)
 		return
+	} else {
+		logger.Info("No console mode")
 	}
 
 	<-stop
