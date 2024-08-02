@@ -206,32 +206,6 @@ func (ua *UserAgent) Request(req *sip.Request) (sip.ClientTransaction, error) {
 func (ua *UserAgent) handleBye(request sip.Request, tx sip.ServerTransaction) {
 	ua.Log().Debugf("handleBye: Request => %s, body => %s", request.Short(), request.Body())
 	response := sip.NewResponseFromRequest(request.MessageID(), request, 200, "OK", "")
-
-	if viaHop, ok := request.ViaHop(); ok {
-		var (
-			host string
-			port sip.Port
-		)
-		host = viaHop.Host
-		if viaHop.Params != nil {
-			if received, ok := viaHop.Params.Get("received"); ok && received.String() != "" {
-				host = received.String()
-			}
-			if viaHop.Port != nil {
-				port = *viaHop.Port
-			} else if rport, ok := viaHop.Params.Get("rport"); ok && rport != nil && rport.String() != "" {
-				if p, err := strconv.Atoi(rport.String()); err == nil {
-					port = sip.Port(uint16(p))
-				}
-			} else {
-				port = sip.DefaultPort(request.Transport())
-			}
-		}
-
-		dest := fmt.Sprintf("%v:%v", host, port)
-		response.SetDestination(dest)
-	}
-
 	tx.Respond(response)
 	callID, ok := request.CallID()
 	fromHeader, ok2 := request.From()
