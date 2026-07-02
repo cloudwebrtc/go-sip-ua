@@ -569,11 +569,11 @@ func (ua *UserAgent) RequestWithContext(ctx context.Context, request sip.Request
 
 							contactHeader, _ := request.Contact()
 
-							if receivedIPAddress, ok := viaHeaderParams.Get("received"); ok {
+							if receivedIPAddress, ok := viaHeaderParams.Get("received"); ok && receivedIPAddress != nil {
 								contactHeader.Address.SetHost(receivedIPAddress.String())
 							}
 
-							if rport, ok := viaHeaderParams.Get("rport"); ok {
+							if rport, ok := viaHeaderParams.Get("rport"); ok && rport != nil {
 								uintRPort, err := strconv.ParseUint(rport.String(), 10, 16)
 
 								// rport parsed successfully.
